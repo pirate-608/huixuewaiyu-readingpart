@@ -2,7 +2,6 @@
 
 > 这是一个 **Claude Code Skill**，安装后通过 `/huixuewaiyu-readingpart` 命令或说"慧学外语刷题"在 Claude Code 中直接调用。
 
-
 [![Python](https://img.shields.io/badge/Python-3.8+-blue)](https://www.python.org/)
 [![Playwright](https://img.shields.io/badge/Playwright-latest-green)](https://playwright.dev/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
@@ -19,9 +18,9 @@
 
 1. 打开 Edge 浏览器，用户通过 CAS 登录一次
 2. 遍历11个阅读主题，提取文章列表（支持已完成检测）
-3. 逐篇点击进入 -> 提取文章+题目 -> 写入 `/tmp/elang_current.json`
-4. AI 读取内容生成答案 -> 写入 `/tmp/elang_signal.json`
-5. 脚本调用 Vue 组件方法 `check_answer()` + `to_submit()` 提交
+3. 逐篇点击进入 -> 提取文章+题目 -> 写入 /tmp/elang_current.json
+4. AI 读取内容生成答案 -> 写入 /tmp/elang_signal.json
+5. 脚本调用 Vue 组件方法 check_answer() + to_submit() 提交
 6. 每个主题完成后保存断点，支持随时中断续传
 
 ## 快速开始
@@ -36,7 +35,7 @@ cd huixuewaiyu-skill
 bash install.sh
 ```
 
-`install.sh` 自动完成：检查 Python 环境 -> 安装 Playwright + Chromium -> 注册到 Claude Code 技能目录 `~/.claude/skills/huixuewaiyu-readingpart/`。安装后在 Claude Code 中说"慧学外语刷题"即可调用。
+install.sh 自动完成：检查 Python -> 安装 Playwright + Chromium -> 注册到 Claude Code 技能目录。
 
 **方式二：手动安装**
 
@@ -50,26 +49,24 @@ cp -r . ~/.claude/skills/huixuewaiyu-readingpart/
 
 ### 使用
 
-```bash
-# 一键刷完所有11个主题（约291篇文章）
-python scripts/elang_reader.py batch-all
+安装后在 **Claude Code** 中通过以下方式调用：
 
-# 刷单个主题
-python scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
+| 指令 | 效果 |
+|------|------|
+| /huixuewaiyu-readingpart | 启动技能，刷完所有主题 |
+| 慧学外语刷题 | 同上，自然语言触发 |
 
-# 刷单篇文章
-python scripts/elang_reader.py solve "https://elang.zju.edu.cn/#/read/praxis?log_id=XXX&resources_id=YYY"
-```
+Claude Code 会自动打开 Edge 浏览器，你登录 CAS 后，AI 逐篇提取文章、答题、提交。每 50 篇会暂停确认，遇到验证码需要你在浏览器中手动输入。
 
 ## AI 答题协议
 
-脚本通过 `/tmp` 目录下的文件与 AI 通信：
+脚本通过 /tmp 目录下的文件与 AI 通信：
 
 | 文件 | 写入方 | 用途 |
 |------|--------|------|
-| `elang_current.json` | 脚本 | 当前文章内容（文章、题目、选项） |
-| `elang_signal.json` | AI | 答案或指令 |
-| `elang_checkpoint.json` | 脚本 | 断点续传状态 |
+| elang_current.json | 脚本 | 当前文章内容（文章、题目、选项） |
+| elang_signal.json | AI | 答案或指令 |
+| elang_checkpoint.json | 脚本 | 断点续传状态 |
 
 ### AI 写入答案格式
 
@@ -80,19 +77,19 @@ python scripts/elang_reader.py solve "https://elang.zju.edu.cn/#/read/praxis?log
 }
 ```
 
-- `[qIdx, optIdx]`: `qIdx` 为题号（从0开始），`optIdx` 为选项（0=A, 1=B, 2=C, 3=D）
-- 跳过文章: `{"status": "skip"}`
-- 继续/停止检查点: `{"status": "continue"}` / `{"status": "stop"}`
+- [qIdx, optIdx]: qIdx 为题号（从0开始），optIdx 为选项（0=A, 1=B, 2=C, 3=D）
+- 跳过文章: {"status": "skip"}
+- 继续/停止检查点: {"status": "continue"} / {"status": "stop"}
 
 ## 特性
 
-- **断点续传**: 每个主题完成后自动保存进度，删除 `/tmp/elang_checkpoint.json` 可重新开始
-- **已完成跳过**: 自动识别已学文章（Vue 数据 + 文本解析双重检测）
-- **填空跳过**: 无选项的填空题自动提交空答案，不阻塞流程
-- **50篇检查点**: 每完成50篇暂停等待确认，防止被封
-- **验证码处理**: 检测到验证码后暂停，等待人工在浏览器中解决
-- **支持 Cloze（完形填空）**: 自动处理20空的完形填空题
-- **支持 True/False**: 自动处理判断题
+- **断点续传**：每个主题完成后自动保存进度，删除 /tmp/elang_checkpoint.json 可重新开始
+- **已完成跳过**：自动识别已学文章（Vue 数据 + 文本解析双重检测）
+- **填空跳过**：无选项的填空题自动提交空答案，不阻塞流程
+- **50篇检查点**：每完成50篇暂停等待确认
+- **验证码处理**：检测到验证码后暂停，等待人工在浏览器中解决
+- **支持 Cloze（完形填空）**：自动处理20空的完形填空题
+- **支持 True/False**：自动处理判断题
 
 ## 目录结构
 
