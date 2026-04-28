@@ -25,11 +25,24 @@
 
 ### 安装
 
+**方式一：一键安装（推荐）**
+
+```bash
+git clone https://gitee.com/tian_haoyuan/huixuewaiyu-skill.git
+cd huixuewaiyu-skill
+bash install.sh
+```
+
+`install.sh` 自动完成：检查 Python 环境 -> 安装 Playwright + Chromium -> 注册到 Claude Code 技能目录 `~/.claude/skills/huixuewaiyu-readingpart/`。安装后在 Claude Code 中说"慧学外语刷题"即可调用。
+
+**方式二：手动安装**
+
 ```bash
 pip install playwright
 playwright install chromium
 git clone https://gitee.com/tian_haoyuan/huixuewaiyu-skill.git
 cd huixuewaiyu-skill
+cp -r . ~/.claude/skills/huixuewaiyu-readingpart/
 ```
 
 ### 使用
@@ -84,6 +97,7 @@ python scripts/elang_reader.py solve "https://elang.zju.edu.cn/#/read/praxis?log
 huixuewaiyu-skill/
 ├── README.md                      # 本文件
 ├── SKILL.md                       # Claude Code 技能定义
+├── install.sh                     # 一键安装脚本
 ├── scripts/
 │   └── elang_reader.py            # 主脚本（Playwright 自动化）
 └── references/
