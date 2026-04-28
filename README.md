@@ -1,5 +1,8 @@
 # 慧学外语阅读自动答题
 
+> 这是一个 **Claude Code Skill**，安装后通过 `/huixuewaiyu-readingpart` 命令或说"慧学外语刷题"在 Claude Code 中直接调用。
+
+
 [![Python](https://img.shields.io/badge/Python-3.8+-blue)](https://www.python.org/)
 [![Playwright](https://img.shields.io/badge/Playwright-latest-green)](https://playwright.dev/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
