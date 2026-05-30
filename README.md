@@ -41,7 +41,7 @@ powershell -File install.ps1
 安装时会引导你输入学号和密码，保存在 `.env`：
 
 ```
-CAS_USERNAME=3250102110
+CAS_USERNAME=你的学号
 CAS_PASSWORD=你的密码
 ```
 
