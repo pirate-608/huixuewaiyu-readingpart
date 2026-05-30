@@ -1,108 +1,106 @@
 # 慧学外语阅读自动答题
 
-> 这是一个 **Claude Code Skill**，安装后通过 `/huixuewaiyu-readingpart` 命令或说"慧学外语刷题"在 Claude Code 中直接调用。
+> **Claude Code Skill** — `/huixuewaiyu-readingpart` 一键刷完 ~291 篇英语阅读
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue)](https://www.python.org/)
 [![Playwright](https://img.shields.io/badge/Playwright-latest-green)](https://playwright.dev/)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
-通过 Playwright 自动化 + AI 答题，批量完成 [慧学外语](https://elang.zju.edu.cn) 平台上的英语阅读练习。
+Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.edu.cn)英语阅读练习。
+
+## 特性
+
+- **CAS 自动登录** — `.env` 配置学号密码，无需手动登录
+- **验证码 OCR** — 4位数字验证码自动识别（ddddocr），10篇后触发
+- **断点续传** — 每个主题完成后保存进度，删除 checkpoint 即可重来
+- **已完成跳过** — Vue 数据 + 文本解析双重检测已学文章
+- **50篇检查点** — 每完成50篇暂停确认，可随时停止
+- **跨平台安装** — Linux/macOS/Windows 一键安装
+
+## 快速开始
+
+### 1. 安装
+
+```bash
+git clone https://gitee.com/tian_haoyuan/huixuewaiyu-readingpart.git
+cd huixuewaiyu-readingpart
+
+# Linux / macOS / Git Bash
+bash install.sh
+
+# Windows PowerShell
+powershell -File install.ps1
+```
+
+`install.sh` / `install.ps1` 自动完成：检查 Python → pip install 依赖 → 安装 Chromium → 复制到 ~/.claude/skills/ → 交互式配置凭据。
+
+### 2. 配置
+
+安装时会引导你输入学号和密码，保存在 `.env`：
+
+```
+CAS_USERNAME=3250102110
+CAS_PASSWORD=你的密码
+```
+
+也可手动复制 `.env.example` 为 `.env` 后填写。凭据仅本地存储，不上传。
+
+### 3. 使用
+
+在 **Claude Code** 中：
+
+| 指令 | 效果 |
+|------|------|
+| `/huixuewaiyu-readingpart` | 启动技能，刷完所有主题 |
+| `慧学外语刷题` | 同上，自然语言触发 |
+
+也可以直接运行脚本：
+
+```bash
+# 全部 11 个主题（~291 篇）
+python scripts/elang_reader.py batch-all
+
+# 单个主题
+python scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
+
+# 单篇文章
+python scripts/elang_reader.py solve "<praxis-url>"
+```
 
 ## 工作原理
 
 ```
-浏览器(Edge) -> 提取文章内容 -> AI读取并作答 -> Vue组件提交 -> 下一篇
-     ^                                                        |
-     +---------- 每50篇暂停确认 / 验证码人工介入 ----------------+
+┌─ CAS 自动登录 (.env 凭据) ──┐
+├─ 遍历 11 个阅读主题 ────────┤
+├─ 提取文章列表 (Vue 数据) ───┤
+├─ 点击文章 → 提取内容 ───────┤
+├─ 写入 C:/tmp/elang_current.json ─┤
+├─ AI 读取、作答 ─────────────┤
+├─ 写入 C:/tmp/elang_signal.json ──┤
+├─ Vue check_answer() + submit() ─┤
+├─ 验证码 OCR (ddddocr) ──────┤
+├─ 50篇检查点 ────────────────┤
+└─ 断点续传 ──────────────────┘
 ```
 
-1. 打开 Edge 浏览器，用户通过 CAS 登录一次
-2. 遍历11个阅读主题，提取文章列表（支持已完成检测）
-3. 逐篇点击进入 -> 提取文章+题目 -> 写入 /tmp/elang_current.json
-4. AI 读取内容生成答案 -> 写入 /tmp/elang_signal.json
-5. 脚本调用 Vue 组件方法 check_answer() + to_submit() 提交
-6. 每个主题完成后保存断点，支持随时中断续传
-
-## 快速开始
-
-### 安装
-
-**方式一：一键安装（推荐）**
-
-```bash
-git clone https://gitee.com/tian_haoyuan/huixuewaiyu-skill.git
-cd huixuewaiyu-skill
-bash install.sh
-```
-
-install.sh 自动完成：检查 Python -> 安装 Playwright + Chromium -> 注册到 Claude Code 技能目录。
-
-**方式二：手动安装**
-
-```bash
-pip install playwright
-playwright install chromium
-git clone https://gitee.com/tian_haoyuan/huixuewaiyu-skill.git
-cd huixuewaiyu-skill
-cp -r . ~/.claude/skills/huixuewaiyu-readingpart/
-```
-
-### 使用
-
-安装后在 **Claude Code** 中通过以下方式调用：
-
-| 指令 | 效果 |
-|------|------|
-| /huixuewaiyu-readingpart | 启动技能，刷完所有主题 |
-| 慧学外语刷题 | 同上，自然语言触发 |
-
-Claude Code 会自动打开 Edge 浏览器，你登录 CAS 后，AI 逐篇提取文章、答题、提交。每 50 篇会暂停确认，遇到验证码需要你在浏览器中手动输入。
-
-## AI 答题协议
-
-脚本通过 /tmp 目录下的文件与 AI 通信：
+## AI 答题协议 (C:/tmp/)
 
 | 文件 | 写入方 | 用途 |
 |------|--------|------|
-| elang_current.json | 脚本 | 当前文章内容（文章、题目、选项） |
-| elang_signal.json | AI | 答案或指令 |
-| elang_checkpoint.json | 脚本 | 断点续传状态 |
+| `elang_current.json` | 脚本 | 当前文章（passage, questions） |
+| `elang_signal.json` | AI | 答案或指令 |
+| `elang_checkpoint.json` | 脚本 | 断点续传状态 |
 
-### AI 写入答案格式
+AI 写入答案：
 
 ```json
-{
-  "status": "answers_ready",
-  "answers": [[0, 0], [1, 2], [2, 1], [3, 3], [4, 0]]
-}
+{"status": "answers_ready", "answers": [[0,0],[1,2],[2,1],[3,3],[4,0]]}
 ```
 
-- [qIdx, optIdx]: qIdx 为题号（从0开始），optIdx 为选项（0=A, 1=B, 2=C, 3=D）
-- 跳过文章: {"status": "skip"}
-- 继续/停止检查点: {"status": "continue"} / {"status": "stop"}
-
-## 特性
-
-- **断点续传**：每个主题完成后自动保存进度，删除 /tmp/elang_checkpoint.json 可重新开始
-- **已完成跳过**：自动识别已学文章（Vue 数据 + 文本解析双重检测）
-- **填空跳过**：无选项的填空题自动提交空答案，不阻塞流程
-- **50篇检查点**：每完成50篇暂停等待确认
-- **验证码处理**：检测到验证码后暂停，等待人工在浏览器中解决
-- **支持 Cloze（完形填空）**：自动处理20空的完形填空题
-- **支持 True/False**：自动处理判断题
-
-## 目录结构
-
-```
-huixuewaiyu-skill/
-├── README.md                      # 本文件
-├── SKILL.md                       # Claude Code 技能定义
-├── install.sh                     # 一键安装脚本
-├── scripts/
-│   └── elang_reader.py            # 主脚本（Playwright 自动化）
-└── references/
-    └── api_reference.md           # 慧学外语后端 API 参考
-```
+- `[qIdx, optIdx]`: qIdx 为题号(0开始)，optIdx 选项(0=A,1=B,2=C,3=D)
+- 跳过: `{"status": "skip"}`
+- 继续: `{"status": "continue"}`
+- 停止: `{"status": "stop"}`
 
 ## 覆盖主题
 
@@ -121,12 +119,37 @@ huixuewaiyu-skill/
 | 11 | 家庭与生活 | 49 |
 | **合计** | | **~291** |
 
+## 目录结构
+
+```
+huixuewaiyu-readingpart/
+├── README.md
+├── SKILL.md                       # Claude Code 技能定义
+├── requirements.txt               # Python 依赖
+├── .env.example                   # 凭据模板
+├── install.sh                     # Linux/macOS 安装脚本
+├── install.ps1                    # Windows 安装脚本
+├── scripts/
+│   └── elang_reader.py            # Playwright 自动化主脚本
+└── references/
+    └── api_reference.md           # 慧学外语后端 API 参考
+```
+
+## 依赖
+
+- Python 3.8+
+- Edge 浏览器
+- `playwright` — 浏览器自动化
+- `python-dotenv` — 环境变量管理
+- `ddddocr` — 验证码 OCR
+- `Pillow` — 图像处理
+
 ## 注意事项
 
-- 需要 ZJU CAS 账号（首次登录时手动完成）
-- 需要 Edge 浏览器
+- 需要 ZJU CAS 账号
 - 脚本运行期间请勿关闭浏览器窗口
-- 大量连续请求可能触发验证码，届时脚本会暂停等待人工解决
+- 连续刷 ~10 篇后平台弹出验证码，脚本自动 OCR 识别
+- 部分特殊题型（填空等）脚本无法识别，会自动跳过
 - 仅供学习用途，请合理使用
 
 ## License
