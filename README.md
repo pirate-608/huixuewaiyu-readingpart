@@ -8,6 +8,8 @@
 
 Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.edu.cn)英语阅读练习。
 
+> **致谢** — 本项目基于开源项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 开发，感谢原作者 [shixu2026](https://gitee.com/shixu2026) 的贡献。
+
 ## 特性
 
 - **CAS 自动登录** — `.env` 配置学号密码，无需手动登录
