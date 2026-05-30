@@ -7,32 +7,55 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 
 Automates English reading exercises on elang.zju.edu.cn via Playwright + Vue component method calls.
 
+## Quick Start
+
+```bash
+# Install
+bash install.sh        # macOS / Linux / Git Bash
+powershell -File install.ps1   # Windows PowerShell
+
+# Run
+python scripts/elang_reader.py batch-all
+```
+
 ## How it works
 
-1. Opens Edge browser — user logs in once via ZJU CAS
+1. Opens Edge browser — auto-fills ZJU CAS login (credentials from `.env`)
 2. Navigates category pages, extracts article lists (Vue data + text fallback)
 3. For each uncompleted article: clicks in, extracts passage + questions via DOM
-4. Writes content to `/tmp/elang_current.json` — AI reads, answers, writes `/tmp/elang_signal.json`
+4. Writes content to `C:/tmp/elang_current.json` — AI reads, answers, writes `C:/tmp/elang_signal.json`
 5. Script calls Vue `check_answer(qIdx, optIdx)` + `to_submit()` to submit
 6. Returns to learn page, continues; saves checkpoint after each category
-7. **Every 50 articles**: pauses for user confirmation
+7. CAPTCHA auto-solved via ddddocr (4-digit numeric)
+8. **Every 50 articles**: pauses for user confirmation
 
 ## Commands
 
 ```bash
 # ALL 11 categories (~291 articles), resumable via checkpoint
-python <skill-path>/scripts/elang_reader.py batch-all
+python scripts/elang_reader.py batch-all
 
 # Single category
-python <skill-path>/scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
+python scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
 
 # Single article
-python <skill-path>/scripts/elang_reader.py solve "<praxis-url>"
+python scripts/elang_reader.py solve "<praxis-url>"
 ```
 
 Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业与发展(18), 运动与娱乐(6), 学习与教育(59), 商业与经济(26), 科技与创新(38), 社会与政治(36), 自然与农业(22), 家庭与生活(49) — ~291 articles total.
 
-## IPC file protocol (/tmp/)
+## Configuration (.env)
+
+Copy `.env.example` to `.env` and fill credentials:
+
+```
+CAS_USERNAME=你的学号
+CAS_PASSWORD=你的密码
+```
+
+These are stored locally and never transmitted.
+
+## IPC file protocol (C:/tmp/)
 
 | File | Writer | Purpose |
 |------|--------|---------|
@@ -40,7 +63,7 @@ Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业
 | `elang_signal.json` | AI | Answers or commands: `status + answers[]` |
 | `elang_checkpoint.json` | Script | Resume state: completed_categories[], total_submitted |
 
-### AI writes to `/tmp/elang_signal.json`:
+### AI writes to `C:/tmp/elang_signal.json`:
 
 ```json
 // Submit answers (0=A, 1=B, 2=C, 3=D)
@@ -59,18 +82,19 @@ Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业
 ## Auto-skipped articles
 
 - Already completed (Vue `status === 2` or text `已学`)
-- No questions or no clickable options (fill-in-blank type — submitted empty)
+- No questions or unrecognised question format — submits empty
 - Navigation failure (no log_id / resources_id)
 
 ## CAPTCHA
 
-Script detects CAPTCHA and pauses. User solves manually in the browser. Script resumes automatically after CAPTCHA clears.
+Auto-solved via ddddocr OCR. Captcha is 4-digit numeric, shown in a `.Verify-box` popup after ~10 consecutive articles. Falls back to manual solve if OCR fails. Once captcha appears, proactively checks on every subsequent article entry.
 
 ## Resume
 
-Delete `/tmp/elang_checkpoint.json` to start fresh. Categories in `completed_categories` are skipped on re-run.
+Delete `C:/tmp/elang_checkpoint.json` to start fresh. Categories in `completed_categories` are skipped on re-run.
 
 ## Requirements
 
-- Python 3.8+, Playwright (`pip install playwright`), Edge browser
-- `playwright install chromium` for browser binaries
+- Python 3.8+, Playwright, python-dotenv, ddddocr, Pillow
+- Edge browser (auto-detected by Playwright)
+- `pip install -r requirements.txt && playwright install chromium`

@@ -32,6 +32,39 @@ import re
 import time
 from pathlib import Path
 from playwright.async_api import async_playwright
+from dotenv import load_dotenv
+import ddddocr
+
+# Load .env from skill directory or cwd; run interactive setup if missing
+_SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ENV_PATHS = [
+    os.path.join(_SKILL_DIR, ".env"),
+    os.path.join(os.getcwd(), ".env"),
+]
+_ENV_LOADED = False
+for _p in _ENV_PATHS:
+    if os.path.exists(_p):
+        load_dotenv(_p)
+        _ENV_LOADED = True
+        break
+
+if not _ENV_LOADED:
+    # Interactive setup
+    print("=" * 50)
+    print("  First-time setup: ZJU CAS credentials")
+    print("  Stored in " + os.path.join(_SKILL_DIR, ".env"))
+    print("=" * 50)
+    _uid = input("Student ID (学号): ").strip()
+    _pwd = input("CAS Password: ").strip()
+    _env_path = os.path.join(_SKILL_DIR, ".env")
+    with open(_env_path, "w") as _f:
+        _f.write(f"CAS_USERNAME={_uid}\nCAS_PASSWORD={_pwd}\n")
+    load_dotenv(_env_path)
+    print(f"Credentials saved to {_env_path}")
+
+CAS_USERNAME = os.getenv("CAS_USERNAME", "")
+CAS_PASSWORD = os.getenv("CAS_PASSWORD", "")
+_ocr = ddddocr.DdddOcr(show_ad=False)
 
 # ---- File paths ----
 SCRATCH_DIR = "/tmp/elang_screenshots"
@@ -40,18 +73,19 @@ SIGNAL_FILE = "/tmp/elang_signal.json"
 CHECKPOINT_FILE = "/tmp/elang_checkpoint.json"
 
 # ---- Tuning constants ----
-CHECKPOINT_INTERVAL = 50   # Pause every N articles for user confirmation
-AI_TIMEOUT = 120           # Max seconds to wait for AI answers per article
-CAPTCHA_TIMEOUT = 300      # Max seconds to wait for manual CAPTCHA
-NAV_LOAD_WAIT = 1.5        # Seconds to wait after page navigation
-BACK_LOAD_WAIT = 0.8       # Seconds between back-navigation retries
-BACK_RETRIES = 8           # Max retries for back navigation
-CAT_LOAD_RETRIES = 12      # Max retries for category page load
+CHECKPOINT_INTERVAL = 50  # Pause every N articles for user confirmation
+AI_TIMEOUT = 120  # Max seconds to wait for AI answers per article
+CAPTCHA_TIMEOUT = 300  # Max seconds to wait for manual CAPTCHA
+NAV_LOAD_WAIT = 1.5  # Seconds to wait after page navigation
+BACK_LOAD_WAIT = 0.8  # Seconds between back-navigation retries
+BACK_RETRIES = 8  # Max retries for back navigation
+CAT_LOAD_RETRIES = 12  # Max retries for category page load
 
 
 # ============================================================
 # Navigation
 # ============================================================
+
 
 async def navigate_to(page, url):
     """Navigate to URL, handle CAS login, wait for SPA to render."""
@@ -59,12 +93,24 @@ async def navigate_to(page, url):
     await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
     if "elang.zju.edu.cn" not in page.url:
-        print("[elang] Waiting for CAS login (up to 120s)...")
-        try:
-            await page.wait_for_url("**elang.zju.edu.cn**", timeout=120000)
-            print("[elang] Logged in!")
-        except:
-            print("[elang] WARNING: Login timeout, proceeding anyway")
+        if CAS_USERNAME and CAS_PASSWORD:
+            print(f"[elang] CAS auto-login as {CAS_USERNAME}...")
+            try:
+                await page.wait_for_selector("#username", timeout=5000)
+                await page.locator("#username").fill(CAS_USERNAME)
+                await page.locator("#password").fill(CAS_PASSWORD)
+                await page.locator("#password").press("Enter")
+                await page.wait_for_url("**elang.zju.edu.cn**", timeout=30000)
+                print("[elang] CAS auto-login OK!")
+            except Exception as e:
+                print(f"[elang] CAS auto-login failed: {e}")
+        else:
+            print("[elang] Waiting for CAS login (up to 120s)...")
+            try:
+                await page.wait_for_url("**elang.zju.edu.cn**", timeout=120000)
+                print("[elang] Logged in!")
+            except:
+                print("[elang] WARNING: Login timeout, proceeding anyway")
 
     await page.wait_for_timeout(int(NAV_LOAD_WAIT * 1000))
 
@@ -97,6 +143,7 @@ async def go_back_to_learn(page, learn_hash):
 # ============================================================
 # Content extraction
 # ============================================================
+
 
 async def extract_page_content(page):
     """Extract passage text and question/options from the praxis page."""
@@ -189,8 +236,18 @@ async def get_article_list(page):
     lines = text.split("\n")
     articles = []
     date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-    skip_words = {"已学", "未学", "学习中", "返回", "慧学外语", "我的阅读",
-                  "问题反馈", "...", "[阅读]", "筛选"}
+    skip_words = {
+        "已学",
+        "未学",
+        "学习中",
+        "返回",
+        "慧学外语",
+        "我的阅读",
+        "问题反馈",
+        "...",
+        "[阅读]",
+        "筛选",
+    }
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -214,7 +271,8 @@ async def get_article_list(page):
 
 async def click_article(page, name):
     """Click an article by title text. Returns (log_id, resources_id, url)."""
-    await page.evaluate("""(targetName) => {
+    await page.evaluate(
+        """(targetName) => {
         const all = document.querySelectorAll('div');
         for (const d of all) {
             if (d.innerText?.trim() === targetName && d.children.length === 0) {
@@ -222,7 +280,9 @@ async def click_article(page, name):
                 return;
             }
         }
-    }""", name)
+    }""",
+        name,
+    )
     await page.wait_for_timeout(1500)
     u = page.url
     log_id = u.split("log_id=")[1].split("&")[0] if "log_id=" in u else ""
@@ -234,10 +294,12 @@ async def click_article(page, name):
 # Answer submission
 # ============================================================
 
+
 async def set_answers(page, answers):
     """Select answers via Vue check_answer(qIdx, optIdx)."""
     for q_idx, opt_idx in answers:
-        result = await page.evaluate("""([qIdx, oIdx]) => {
+        result = await page.evaluate(
+            """([qIdx, oIdx]) => {
             function findVm(vm, d, method) {
                 if (!vm || d > 10) return null;
                 if (vm.$options && vm.$options.methods
@@ -253,7 +315,9 @@ async def set_answers(page, answers):
             const vm = findVm(document.querySelector('#app').__vue__, 0, 'check_answer');
             if (vm) { vm.check_answer(qIdx, oIdx); return 'OK'; }
             return 'no vm';
-        }""", [q_idx, opt_idx])
+        }""",
+            [q_idx, opt_idx],
+        )
         print(f"  Q{q_idx+1}: opt {opt_idx} -> {result}")
         await page.wait_for_timeout(80)
 
@@ -284,6 +348,7 @@ async def submit(page):
 # ============================================================
 # AI answer coordination (file IPC)
 # ============================================================
+
 
 async def wait_for_ai(timeout=AI_TIMEOUT):
     """Wait for AI to write SIGNAL_FILE. Returns data dict or None."""
@@ -321,7 +386,8 @@ async def request_ai_answers(article_data):
 # CAPTCHA handling
 # ============================================================
 
-CAPTCHA_KEYWORDS = ["...", "captcha", "...", "...", "verification", "..."]
+CAPTCHA_KEYWORDS = ["captcha", "验证码", "verification", "请完成验证"]
+
 
 async def detect_captcha(page):
     """Check whether the page is showing a CAPTCHA."""
@@ -332,29 +398,197 @@ async def detect_captcha(page):
                 return True
     except:
         pass
+    try:
+        has_img = await page.evaluate("""() => {
+            return !!document.querySelector('img[src*="captcha"],img[src*="code"],img[class*="captcha"],.captcha-img,.verify-img')
+        }""")
+        if has_img:
+            return True
+    except:
+        pass
     return False
 
 
+# Track captcha state: once it appears, it persists for the rest of the session
+_captcha_seen = False
+
+
 async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
-    """Block until the user solves the CAPTCHA manually."""
-    print("[elang] !! CAPTCHA detected! Please solve it in the browser...")
-    print(f"[elang] Waiting up to {timeout}s...")
+    """OCR-solve captcha. Once captcha appears, proactively check on every entry."""
+    global _captcha_seen
+    print("[elang] !! CAPTCHA detected!")
+
+    # Step 1: Find the captcha image — elang uses .Verify-box img
+    img = None
+    # Primary: elang's specific captcha structure
+    for sel in ['.Verify-box img', 'img[src*="captcha"]', 'img[src*="code"]', 'img[src*="verify"]']:
+        try:
+            el = page.locator(sel).first
+            if await el.count() > 0:
+                img = el
+                break
+        except:
+            pass
+    # Fallback: any img in popup/dialog
+    if not img:
+        for container in ['.van-popup', '.van-dialog', '.van-overlay', '.Verify-box']:
+            try:
+                imgs = page.locator(f'{container} img')
+                for i in range(await imgs.count()):
+                    if await imgs.nth(i).is_visible():
+                        img = imgs.nth(i)
+                        break
+            except:
+                pass
+            if img:
+                break
+
+    if not img:
+        print("[elang] No captcha image found")
+        return await _captcha_manual_fallback(page, timeout)
+
+    # Step 2: Screenshot + OCR
+    try:
+        img_bytes = await img.screenshot()
+        # Save for debugging
+        Path(SCRATCH_DIR).mkdir(parents=True, exist_ok=True)
+        with open(os.path.join(SCRATCH_DIR, "captcha_last.png"), "wb") as f:
+            f.write(img_bytes)
+
+        # Try OCR with original image
+        text = str(_ocr.classification(img_bytes)).strip()
+        print(f"[elang] OCR raw: '{text}'")
+
+        # Filter to digits only (elang captcha is always 4 digits)
+        digits = ''.join(c for c in text if c.isdigit())
+        if len(digits) >= 4:
+            text = digits[:4]  # Take first 4 digits
+        elif len(digits) < 4 and len(text) >= 4:
+            text = text[:4]  # Use raw result if at least 4 chars
+        else:
+            print(f"[elang] OCR result too short: '{text}'")
+            return await _captcha_manual_fallback(page, timeout)
+
+        print(f"[elang] CAPTCHA code: '{text}'")
+    except Exception as e:
+        print(f"[elang] OCR error: {e}")
+        return await _captcha_manual_fallback(page, timeout)
+
+    # Step 3: Fill the captcha input — elang uses .Verify-box input
+    filled = False
+    for sel in ['.Verify-box input', '.input-box input',
+                'input[placeholder*="验证码"]', 'input[placeholder*="请输入"]',
+                '.van-field__control', 'input[type="text"]']:
+        try:
+            inp = page.locator(sel).first
+            if await inp.count() > 0 and await inp.is_visible():
+                await inp.click()
+                await page.wait_for_timeout(100)
+                await inp.fill('')
+                await inp.fill(text)
+                await page.wait_for_timeout(300)
+                filled = True
+                print(f"[elang] Filled captcha via {sel}")
+                break
+        except:
+            pass
+
+    if not filled:
+        print("[elang] Could not find captcha input")
+        return await _captcha_manual_fallback(page, timeout)
+
+    # Step 4: Click confirm — elang uses div.btn-Verify (NOT a <button>!)
+    clicked = False
+    for sel in ['.btn-Verify', 'div.btn-Verify', '.Verify-box .btn-Verify',
+                'button:has-text("提交")', 'button:has-text("确定")',
+                '.van-button--primary', '.van-dialog__confirm', 'button']:
+        try:
+            btn = page.locator(sel).first
+            if await btn.count() > 0 and await btn.is_visible():
+                await btn.click()
+                await page.wait_for_timeout(2000)
+                clicked = True
+                print(f"[elang] Clicked confirm via {sel}")
+                break
+        except:
+            pass
+
+    if not clicked:
+        # Last resort: JS click on .btn-Verify
+        try:
+            await page.evaluate("() => { const b = document.querySelector('.btn-Verify'); if(b) b.click(); }")
+            await page.wait_for_timeout(2000)
+            clicked = True
+            print("[elang] Clicked .btn-Verify via JS")
+        except:
+            pass
+
+    if not clicked:
+        print("[elang] No confirm button found for captcha")
+
+    # Step 5: Check if captcha cleared
+    await page.wait_for_timeout(500)
+    if not await detect_captcha(page):
+        _captcha_seen = True
+        print("[elang] [OK] CAPTCHA solved via OCR!")
+        return True
+
+    # If still showing captcha, OCR might have been wrong — retry once
+    print("[elang] Captcha still present, retrying OCR...")
+    try:
+        img_bytes2 = await img.screenshot()
+        text2 = str(_ocr.classification(img_bytes2)).strip()
+        digits2 = ''.join(c for c in text2 if c.isdigit())
+        if len(digits2) >= 4 and digits2[:4] != text:
+            text = digits2[:4]
+            print(f"[elang] Retry OCR: '{text}'")
+            for sel in ['input[placeholder*="验证码"]', '.van-field__control', 'input[type="text"]']:
+                inp = page.locator(sel).first
+                if await inp.count() > 0 and await inp.is_visible():
+                    await inp.fill('')
+                    await inp.fill(text)
+                    break
+            await page.keyboard.press("Enter")
+            await page.wait_for_timeout(2000)
+            if not await detect_captcha(page):
+                _captcha_seen = True
+                print("[elang] [OK] CAPTCHA solved on retry!")
+                return True
+    except:
+        pass
+
+    return await _captcha_manual_fallback(page, timeout)
+
+
+async def _captcha_manual_fallback(page, timeout):
+    """Manual captcha solve fallback."""
+    print(f"[elang] OCR failed, please solve manually (up to {timeout}s)...")
     waited = 0
     while waited < timeout:
         await asyncio.sleep(3)
         waited += 3
         if not await detect_captcha(page):
+            global _captcha_seen
+            _captcha_seen = True
             print("[elang] [OK] CAPTCHA resolved!")
             return True
-        if waited % 30 == 0:
-            print(f"[elang] Still waiting... ({waited}s)")
-    print("[elang] CAPTCHA wait timeout.")
     return False
+
+
+async def check_and_handle_captcha(page):
+    """Proactive captcha check — call before entering article if captcha was seen before."""
+    global _captcha_seen
+    if _captcha_seen:
+        print("[elang] Proactive captcha check (seen before)...")
+        if await detect_captcha(page):
+            return await wait_for_captcha(page)
+    return True
 
 
 # ============================================================
 # Article processor (per category)
 # ============================================================
+
 
 async def process_articles(page, article_infos, start_counter, learn_hash):
     """Process all uncompleted articles in a category. Returns result list."""
@@ -390,9 +624,13 @@ async def process_articles(page, article_infos, start_counter, learn_hash):
             await page.wait_for_timeout(2000)
         await page.wait_for_timeout(800)
 
-        # CAPTCHA check
-        if await detect_captcha(page):
-            await wait_for_captcha(page)
+        # CAPTCHA check (proactive if captcha was seen before)
+        if _captcha_seen or await detect_captcha(page):
+            if not await wait_for_captcha(page):
+                print(f"  SKIP: captcha timeout")
+                await go_back_to_learn(page, learn_hash)
+                results.append({"name": name, "status": "captcha_timeout"})
+                continue
             await page.wait_for_timeout(500)
 
         # Extract content
@@ -414,12 +652,17 @@ async def process_articles(page, article_infos, start_counter, learn_hash):
             results.append({"name": name, "status": "skipped_no_options"})
             continue
 
-        print(f"  Qs: {len(content['questions'])} | Passage: {len(content['passage'])} chars")
+        print(
+            f"  Qs: {len(content['questions'])} | Passage: {len(content['passage'])} chars"
+        )
 
         # Save raw content for reference
         Path(SCRATCH_DIR).mkdir(parents=True, exist_ok=True)
-        with open(os.path.join(SCRATCH_DIR, f"article_{article_num}.json"),
-                  "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(SCRATCH_DIR, f"article_{article_num}.json"),
+            "w",
+            encoding="utf-8",
+        ) as f:
             json.dump(content, f, ensure_ascii=False, indent=2)
 
         # Request AI answers
@@ -433,7 +676,7 @@ async def process_articles(page, article_infos, start_counter, learn_hash):
             "passage": content["passage"][:5000],
             "questions": content["questions"],
             "answers": [],
-            "status": "waiting_for_ai"
+            "status": "waiting_for_ai",
         }
 
         data = await request_ai_answers(article_data)
@@ -445,7 +688,11 @@ async def process_articles(page, article_infos, start_counter, learn_hash):
             results.append({"name": name, "status": "submitted"})
             print(f"  [OK] Skipped!")
 
-        elif data and data.get("status") == "answers_ready" and data.get("answers") is not None:
+        elif (
+            data
+            and data.get("status") == "answers_ready"
+            and data.get("answers") is not None
+        ):
             await set_answers(page, data["answers"])
             await page.wait_for_timeout(200)
 
@@ -476,6 +723,7 @@ def print_summary(results):
 # ============================================================
 # Batch ALL categories
 # ============================================================
+
 
 async def mode_batch_all(start_cat=0):
     """Process all 11 reading categories. Resumable via checkpoint."""
@@ -543,8 +791,10 @@ async def mode_batch_all(start_cat=0):
         if os.path.exists(CHECKPOINT_FILE):
             with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f:
                 checkpoint = json.load(f)
-            print(f"\n[elang] Resuming: {checkpoint.get('total_submitted', 0)} done, "
-                  f"{len(checkpoint.get('completed_categories', []))} categories complete")
+            print(
+                f"\n[elang] Resuming: {checkpoint.get('total_submitted', 0)} done, "
+                f"{len(checkpoint.get('completed_categories', []))} categories complete"
+            )
 
         total_submitted = checkpoint.get("total_submitted", 0)
         article_counter = total_submitted
@@ -566,15 +816,18 @@ async def mode_batch_all(start_cat=0):
             print(f"CATEGORY [{cat_idx+1}/{len(categories)}]: {cat_name} (id={cat_id})")
             print(f"{'='*60}")
 
-            # Navigate to category learn page
-            await page.evaluate(
-                f"window.location.hash = '/read/learn?subject_id={cat_id}'"
-            )
-            for _ in range(CAT_LOAD_RETRIES):
-                await page.wait_for_timeout(800)
-                text = await page.evaluate("() => document.body.innerText")
-                if "..." not in text and len(text.split("\n")) > 10:
-                    break
+            # Navigate: clear page → goto learn URL (twice if CAS redirects to /#/home)
+            learn_url = f"https://elang.zju.edu.cn/#/read/learn?subject_id={cat_id}"
+            await page.goto("about:blank")
+            await page.wait_for_timeout(500)
+            await page.goto(learn_url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(4000)
+            # If CAS redirected us to /#/home, retry (2nd goto lands correctly)
+            if "/#/home" in page.url or "learn" not in page.url:
+                print(f"[elang]   landed on home, retrying...")
+                await page.goto(learn_url, wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_timeout(4000)
+            print(f"[elang]   nav URL: {page.url}")
 
             article_infos = await get_article_list(page)
             print(f"[elang] {len(article_infos)} articles found")
@@ -614,10 +867,7 @@ async def mode_batch_all(start_cat=0):
                 print(f'  {{"status": "continue"}}  or  {{"status": "stop"}}')
                 print(f"{'='*60}")
 
-                cp_data = {
-                    "status": "checkpoint",
-                    "total_submitted": total_submitted
-                }
+                cp_data = {"status": "checkpoint", "total_submitted": total_submitted}
                 with open(CURRENT_FILE, "w", encoding="utf-8") as f:
                     json.dump(cp_data, f, ensure_ascii=False)
                 if os.path.exists(SIGNAL_FILE):
@@ -630,8 +880,10 @@ async def mode_batch_all(start_cat=0):
                     return
                 print("[elang] Continuing...")
 
-        print(f"\n[elang] ALL DONE! {total_submitted} submitted across "
-              f"{len(categories)} categories.")
+        print(
+            f"\n[elang] ALL DONE! {total_submitted} submitted across "
+            f"{len(categories)} categories."
+        )
         await asyncio.sleep(10)
         await browser.close()
 
@@ -639,6 +891,7 @@ async def mode_batch_all(start_cat=0):
 # ============================================================
 # Single-article solve mode
 # ============================================================
+
 
 async def mode_solve(url):
     """Process a single article: extract, wait for AI, submit."""
@@ -671,7 +924,7 @@ async def mode_solve(url):
             "passage": content["passage"][:5000],
             "questions": content["questions"],
             "answers": [],
-            "status": "waiting_for_ai"
+            "status": "waiting_for_ai",
         }
 
         data = await request_ai_answers(article_data)
@@ -694,6 +947,7 @@ async def mode_solve(url):
 # ============================================================
 # Single-category batch mode
 # ============================================================
+
 
 async def mode_batch(learn_url):
     """Process all articles in a single category."""
@@ -723,6 +977,7 @@ async def mode_batch(learn_url):
 # ============================================================
 # CLI entry point
 # ============================================================
+
 
 def main():
     if len(sys.argv) < 2:
