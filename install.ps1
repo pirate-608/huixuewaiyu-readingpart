@@ -13,33 +13,25 @@ Write-Host "========================================" -ForegroundColor Cyan
 # Check Python
 try {
     $pythonVer = python --version 2>&1
+    $pyFull = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+    $pyMajor, $pyMinor = $pyFull -split '\.'
+    if ([int]$pyMajor -lt 3 -or ([int]$pyMajor -eq 3 -and [int]$pyMinor -lt 8)) {
+        Write-Host "ERROR: Python 3.8+ required, found $pyFull" -ForegroundColor Red
+        exit 1
+    }
+    if ([int]$pyMajor -eq 3 -and [int]$pyMinor -ge 13) {
+        Write-Host "WARNING: Python $pyFull detected. ddddocr depends on opencv-python which may" -ForegroundColor Yellow
+        Write-Host "  not have wheels for Python 3.13+ yet. If install fails, use Python 3.11–3.12." -ForegroundColor Yellow
+        Write-Host "  conda create -n elang python=3.12 && conda activate elang" -ForegroundColor Yellow
+        Write-Host ""
+    }
     Write-Host "[OK] Python: $pythonVer" -ForegroundColor Green
 } catch {
     Write-Host "ERROR: Python not found. Install Python 3.8+ from https://python.org" -ForegroundColor Red
     exit 1
 }
 
-# Install Python dependencies
-Write-Host ""
-Write-Host "Installing Python dependencies..." -ForegroundColor Yellow
-pip install -r "$SCRIPT_DIR\requirements.txt"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: pip install failed. Try manually: pip install -r requirements.txt" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] Dependencies installed" -ForegroundColor Green
-
-# Install Playwright browser
-Write-Host ""
-Write-Host "Installing Chromium browser for Playwright..." -ForegroundColor Yellow
-python -m playwright install chromium
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "WARNING: playwright install chromium failed." -ForegroundColor Yellow
-    Write-Host "Run manually: playwright install chromium" -ForegroundColor Yellow
-}
-Write-Host "[OK] Chromium ready" -ForegroundColor Green
-
-# Copy skill files
+# Copy skill files (before venv so SKILL.md is in place)
 Write-Host ""
 Write-Host "Copying skill files..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path "$SKILL_DIR\scripts" | Out-Null
@@ -51,6 +43,34 @@ Copy-Item -Force "$SCRIPT_DIR\SKILL.md" "$SKILL_DIR\"
 Copy-Item -Force "$SCRIPT_DIR\.env.example" "$SKILL_DIR\assets\"
 Copy-Item -Force "$SCRIPT_DIR\requirements.txt" "$SKILL_DIR\assets\"
 Write-Host "[OK] Files copied to $SKILL_DIR" -ForegroundColor Green
+
+# Create virtual environment (isolated from global/conda Python)
+Write-Host ""
+Write-Host "Creating virtual environment..." -ForegroundColor Yellow
+python -m venv "$SKILL_DIR\.venv"
+$VENV_PYTHON = "$SKILL_DIR\.venv\Scripts\python.exe"
+Write-Host "[OK] venv created at $SKILL_DIR\.venv" -ForegroundColor Green
+
+# Install Python dependencies into venv
+Write-Host ""
+Write-Host "Installing Python dependencies (into venv)..." -ForegroundColor Yellow
+& "$VENV_PYTHON" -m pip install --upgrade pip -q
+& "$VENV_PYTHON" -m pip install -r "$SKILL_DIR\assets\requirements.txt"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: pip install failed. Try manually: $VENV_PYTHON -m pip install -r $SKILL_DIR\assets\requirements.txt" -ForegroundColor Red
+    exit 1
+}
+Write-Host "[OK] Dependencies installed" -ForegroundColor Green
+
+# Install Playwright browser (uses venv's playwright)
+Write-Host ""
+Write-Host "Installing Chromium browser for Playwright..." -ForegroundColor Yellow
+& "$VENV_PYTHON" -m playwright install chromium
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: playwright install chromium failed." -ForegroundColor Yellow
+    Write-Host "Run manually: $VENV_PYTHON -m playwright install chromium" -ForegroundColor Yellow
+}
+Write-Host "[OK] Chromium ready" -ForegroundColor Green
 
 # Setup .env
 Write-Host ""
@@ -89,6 +109,11 @@ if ($installAgents -eq "y" -or $installAgents -eq "Y") {
     if (Test-Path "$SKILL_DIR\.env") {
         Copy-Item -Force "$SKILL_DIR\.env" "$AGENTS_DIR\"
     }
+    # Create venv for agents dir too
+    python -m venv "$AGENTS_DIR\.venv"
+    $AGENTS_PYTHON = "$AGENTS_DIR\.venv\Scripts\python.exe"
+    & "$AGENTS_PYTHON" -m pip install --upgrade pip -q
+    & "$AGENTS_PYTHON" -m pip install -r "$AGENTS_DIR\assets\requirements.txt" -q
     Write-Host "[OK] Agent files copied to $AGENTS_DIR" -ForegroundColor Green
 }
 
@@ -97,6 +122,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Installation complete!" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Skill directory: $SKILL_DIR"
+Write-Host "Python: $VENV_PYTHON"
 Write-Host ""
 Write-Host "Usage in Claude Code:"
 Write-Host "  /huixuewaiyu-readingpart"
