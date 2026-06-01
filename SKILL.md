@@ -22,28 +22,19 @@ This skill has two distinct modes. **Determine which mode applies before doing a
 
 ## Mode 1: Orchestrator (start the automation)
 
-### Quick Start
-
-```bash
-# Install
-bash install.sh        # macOS / Linux / Git Bash
-powershell -File install.ps1   # Windows PowerShell
-
-# Run
-python scripts/elang_reader.py batch-all
-```
-
 ### Commands
+
+The skill scripts live at `~/.claude/skills/huixuewaiyu-readingpart/`. Always use this absolute path — your working directory is the user's workspace, not the skill directory.
 
 ```bash
 # ALL 11 categories (~291 articles), resumable via checkpoint
-python scripts/elang_reader.py batch-all
+python ~/.claude/skills/huixuewaiyu-readingpart/scripts/elang_reader.py batch-all
 
 # Single category
-python scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
+python ~/.claude/skills/huixuewaiyu-readingpart/scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
 
 # Single article
-python scripts/elang_reader.py solve "<praxis-url>"
+python ~/.claude/skills/huixuewaiyu-readingpart/scripts/elang_reader.py solve "<praxis-url>"
 ```
 
 Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业与发展(18), 运动与娱乐(6), 学习与教育(59), 商业与经济(26), 科技与创新(38), 社会与政治(36), 自然与农业(22), 家庭与生活(49) — ~291 articles total.

@@ -44,11 +44,12 @@ Write-Host ""
 Write-Host "Copying skill files..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path "$SKILL_DIR\scripts" | Out-Null
 New-Item -ItemType Directory -Force -Path "$SKILL_DIR\references" | Out-Null
+New-Item -ItemType Directory -Force -Path "$SKILL_DIR\assets" | Out-Null
 Copy-Item -Force "$SCRIPT_DIR\scripts\elang_reader.py" "$SKILL_DIR\scripts\"
 Copy-Item -Force "$SCRIPT_DIR\references\api_reference.md" "$SKILL_DIR\references\"
 Copy-Item -Force "$SCRIPT_DIR\SKILL.md" "$SKILL_DIR\"
-Copy-Item -Force "$SCRIPT_DIR\.env.example" "$SKILL_DIR\"
-Copy-Item -Force "$SCRIPT_DIR\requirements.txt" "$SKILL_DIR\"
+Copy-Item -Force "$SCRIPT_DIR\.env.example" "$SKILL_DIR\assets\"
+Copy-Item -Force "$SCRIPT_DIR\requirements.txt" "$SKILL_DIR\assets\"
 Write-Host "[OK] Files copied to $SKILL_DIR" -ForegroundColor Green
 
 # Setup .env
@@ -70,6 +71,25 @@ CAS_PASSWORD=$pass
     Write-Host "[OK] Credentials saved to .env" -ForegroundColor Green
 } else {
     Write-Host "[OK] .env already exists — skipping credential setup" -ForegroundColor Green
+}
+
+# Also install to ~/.agents/
+Write-Host ""
+$installAgents = Read-Host "Also install as general agent to ~/.agents/? (y/N)"
+if ($installAgents -eq "y" -or $installAgents -eq "Y") {
+    $AGENTS_DIR = "$env:USERPROFILE\.agents\$SKILL_NAME"
+    New-Item -ItemType Directory -Force -Path "$AGENTS_DIR\scripts" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$AGENTS_DIR\references" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$AGENTS_DIR\assets" | Out-Null
+    Copy-Item -Force "$SKILL_DIR\scripts\elang_reader.py" "$AGENTS_DIR\scripts\"
+    Copy-Item -Force "$SKILL_DIR\references\api_reference.md" "$AGENTS_DIR\references\"
+    Copy-Item -Force "$SKILL_DIR\SKILL.md" "$AGENTS_DIR\"
+    Copy-Item -Force "$SKILL_DIR\assets\.env.example" "$AGENTS_DIR\assets\"
+    Copy-Item -Force "$SKILL_DIR\assets\requirements.txt" "$AGENTS_DIR\assets\"
+    if (Test-Path "$SKILL_DIR\.env") {
+        Copy-Item -Force "$SKILL_DIR\.env" "$AGENTS_DIR\"
+    }
+    Write-Host "[OK] Agent files copied to $AGENTS_DIR" -ForegroundColor Green
 }
 
 Write-Host ""
