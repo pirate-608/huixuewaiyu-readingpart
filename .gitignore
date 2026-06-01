@@ -31,3 +31,6 @@ test-results/
 
 # 临时截图（脚本运行产物）
 /tmp/elang_screenshots/
+
+# 其他
+/temp/  

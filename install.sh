@@ -37,12 +37,12 @@ echo "[OK] Chromium ready"
 # Copy skill files
 echo ""
 echo "Copying skill files..."
-mkdir -p "$SKILL_DIR/scripts" "$SKILL_DIR/references"
+mkdir -p "$SKILL_DIR/scripts" "$SKILL_DIR/references" "$SKILL_DIR/assets"
 cp "$SCRIPT_DIR/scripts/elang_reader.py" "$SKILL_DIR/scripts/"
 cp "$SCRIPT_DIR/references/api_reference.md" "$SKILL_DIR/references/"
 cp "$SCRIPT_DIR/SKILL.md" "$SKILL_DIR/"
-cp "$SCRIPT_DIR/.env.example" "$SKILL_DIR/"
-cp "$SCRIPT_DIR/requirements.txt" "$SKILL_DIR/"
+cp "$SCRIPT_DIR/.env.example" "$SKILL_DIR/assets/"
+cp "$SCRIPT_DIR/requirements.txt" "$SKILL_DIR/assets/"
 echo "[OK] Files copied to $SKILL_DIR"
 
 # Setup .env
@@ -62,6 +62,23 @@ EOF
     echo "[OK] Credentials saved to .env"
 else
     echo "[OK] .env already exists — skipping credential setup"
+fi
+
+# Also install to ~/.agents/
+echo ""
+read -p "Also install as general agent to ~/.agents/? (y/N): " INSTALL_AGENTS
+if [ "$INSTALL_AGENTS" = "y" ] || [ "$INSTALL_AGENTS" = "Y" ]; then
+    AGENTS_DIR="$HOME/.agents/$SKILL_NAME"
+    mkdir -p "$AGENTS_DIR/scripts" "$AGENTS_DIR/references" "$AGENTS_DIR/assets"
+    cp "$SKILL_DIR/scripts/elang_reader.py" "$AGENTS_DIR/scripts/"
+    cp "$SKILL_DIR/references/api_reference.md" "$AGENTS_DIR/references/"
+    cp "$SKILL_DIR/SKILL.md" "$AGENTS_DIR/"
+    cp "$SKILL_DIR/assets/.env.example" "$AGENTS_DIR/assets/"
+    cp "$SKILL_DIR/assets/requirements.txt" "$AGENTS_DIR/assets/"
+    if [ -f "$SKILL_DIR/.env" ]; then
+        cp "$SKILL_DIR/.env" "$AGENTS_DIR/"
+    fi
+    echo "[OK] Agent files copied to $AGENTS_DIR"
 fi
 
 echo ""
