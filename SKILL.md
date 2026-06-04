@@ -26,27 +26,45 @@ This skill has two distinct modes. **Determine which mode applies before doing a
 
 The skill has its own venv at `~/.claude/skills/huixuewaiyu-readingpart/.venv/`. Always use the venv Python — your global/conda environment is irrelevant.
 
+**Before running**, verify the venv exists. If it doesn't, the skill hasn't been installed yet — tell the user to run `install.sh` or `install.ps1` first.
+
 ```bash
 # Bash (Git Bash / Linux / macOS)
-SKILL_PYTHON=~/.claude/skills/huixuewaiyu-readingpart/.venv/Scripts/python
+SKILL_DIR="$HOME/.claude/skills/huixuewaiyu-readingpart"
+# Auto-detect venv layout (Windows = Scripts/, Unix = bin/)
+if [ -f "$SKILL_DIR/.venv/Scripts/python" ]; then
+    SKILL_PYTHON="$SKILL_DIR/.venv/Scripts/python"
+elif [ -f "$SKILL_DIR/.venv/bin/python" ]; then
+    SKILL_PYTHON="$SKILL_DIR/.venv/bin/python"
+else
+    echo "ERROR: venv not found. Run install.sh first." && exit 1
+fi
 
 # ALL 11 categories (~291 articles), resumable via checkpoint
-$SKILL_PYTHON ~/.claude/skills/huixuewaiyu-readingpart/scripts/elang_reader.py batch-all
+$SKILL_PYTHON $SKILL_DIR/scripts/elang_reader.py batch-all
 
-# Single category  
-$SKILL_PYTHON ~/.claude/skills/huixuewaiyu-readingpart/scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
+# Single category
+$SKILL_PYTHON $SKILL_DIR/scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
 
 # Single article
-$SKILL_PYTHON ~/.claude/skills/huixuewaiyu-readingpart/scripts/elang_reader.py solve "<praxis-url>"
+$SKILL_PYTHON $SKILL_DIR/scripts/elang_reader.py solve "<praxis-url>"
 ```
 
 ```powershell
 # PowerShell
-$SKILL_PYTHON = "$env:USERPROFILE\.claude\skills\huixuewaiyu-readingpart\.venv\Scripts\python.exe"
+$SKILL_DIR = "$env:USERPROFILE\.claude\skills\huixuewaiyu-readingpart"
+$SKILL_PYTHON = "$SKILL_DIR\.venv\Scripts\python.exe"
+if (-not (Test-Path $SKILL_PYTHON)) {
+    # MSYS2/Cygwin Python creates bin/ layout instead
+    $SKILL_PYTHON = "$SKILL_DIR\.venv\bin\python.exe"
+}
+if (-not (Test-Path $SKILL_PYTHON)) {
+    Write-Error "venv not found. Run install.ps1 first."; exit 1
+}
 
-& $SKILL_PYTHON $env:USERPROFILE\.claude\skills\huixuewaiyu-readingpart\scripts\elang_reader.py batch-all
-& $SKILL_PYTHON $env:USERPROFILE\.claude\skills\huixuewaiyu-readingpart\scripts\elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
-& $SKILL_PYTHON $env:USERPROFILE\.claude\skills\huixuewaiyu-readingpart\scripts\elang_reader.py solve "<praxis-url>"
+& $SKILL_PYTHON $SKILL_DIR\scripts\elang_reader.py batch-all
+& $SKILL_PYTHON $SKILL_DIR\scripts\elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
+& $SKILL_PYTHON $SKILL_DIR\scripts\elang_reader.py solve "<praxis-url>"
 ```
 
 Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业与发展(18), 运动与娱乐(6), 学习与教育(59), 商业与经济(26), 科技与创新(38), 社会与政治(36), 自然与农业(22), 家庭与生活(49) — ~291 articles total.
@@ -86,10 +104,7 @@ Delete `C:/tmp/elang_checkpoint.json` to start fresh. Categories in `completed_c
 
 ### Step 1: Read the article
 
-```bash
-cat /tmp/elang_current.json   # Linux/macOS
-type C:\tmp\elang_current.json  # Windows
-```
+Use the **Read tool** to read `C:/tmp/elang_current.json` — this is an absolute path, the Python script writes it there regardless of your working directory.
 
 The JSON contains:
 - `passage` — the reading passage text
@@ -98,15 +113,14 @@ The JSON contains:
 
 ### Step 2: Answer and write signal
 
-Write your answers to `C:/tmp/elang_signal.json`:
-
-If you have file-writing tools, write the JSON there. Otherwise, output only the JSON payload in a code block so the user can copy it into that file.
+Use the **Write tool** to write your answer to `C:/tmp/elang_signal.json`:
 
 ```json
-// Submit answers as [question_index, option_index] tuples (0=A, 1=B, 2=C, 3=D, 4=E; for True/False, 0=True, 1=False). If the format cannot be mapped, use {"status": "skip"}.
+// Submit answers as [question_index, option_index] tuples
+// (0=A, 1=B, 2=C, 3=D, 4=E; True/False: 0=True, 1=False)
 {"status": "answers_ready", "answers": [[0, 0], [1, 2], [2, 1], [3, 3], [4, 0]]}
 
-// Skip article (fill-in-blank, broken, etc.)
+// Skip article (fill-in-blank, broken, unreadable)
 {"status": "skip"}
 
 // Checkpoint confirmation (every 50 articles)
@@ -114,15 +128,6 @@ If you have file-writing tools, write the JSON there. Otherwise, output only the
 
 // Stop after current category
 {"status": "stop"}
-```
-
-Each answer entry is `[qIdx, optIdx]` where `qIdx` is the 0-based question index and `optIdx` is the 0-based option index (0=A, 1=B, 2=C, 3=D, 4=E). For True/False, use 0=True and 1=False. If a question type cannot be mapped cleanly to this scheme, return `{"status": "skip"}`.
-
-### After writing the signal file
-
-```bash
-# Use absolute paths — the Python script is polling for this file:
-Write("C:/tmp/elang_signal.json", <json>)
 ```
 
 The script polls every 1 second and will pick up the file within 2 seconds.
@@ -157,6 +162,7 @@ Auto-solved via ddddocr OCR. Captcha is 4-digit numeric, shown in a `.Verify-box
 
 ## Requirements
 
-- Python 3.8+, Playwright, python-dotenv, ddddocr, Pillow
-- Edge browser (auto-detected by Playwright)
-- `pip install -r requirements.txt && playwright install chromium`
+- Python 3.8+
+- Edge browser (Playwright uses `channel="msedge"`)
+- ZJU CAS account with access to elang.zju.edu.cn
+- Install via `install.sh` / `install.ps1` (creates an isolated venv with all dependencies)

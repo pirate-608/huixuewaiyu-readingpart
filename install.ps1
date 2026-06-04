@@ -10,26 +10,68 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Installing $SKILL_NAME" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Check Python
-try {
-    $pythonVer = python --version 2>&1
-    $pyFull = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-    $pyMajor, $pyMinor = $pyFull -split '\.'
-    if ([int]$pyMajor -lt 3 -or ([int]$pyMajor -eq 3 -and [int]$pyMinor -lt 8)) {
-        Write-Host "ERROR: Python 3.8+ required, found $pyFull" -ForegroundColor Red
-        exit 1
+# Find a Windows-native Python (prefer over MSYS2/Cygwin Python which creates
+# Unix-layout venvs with bin/ instead of Scripts/, breaking path assumptions).
+function Find-NativePython {
+    $candidates = @()
+    # Check common install locations first
+    foreach ($pyDir in @("C:\Python314", "C:\Python313", "C:\Python312", "C:\Python311",
+                          "$env:LOCALAPPDATA\Programs\Python\Python314",
+                          "$env:LOCALAPPDATA\Programs\Python\Python313",
+                          "$env:LOCALAPPDATA\Programs\Python\Python312",
+                          "$env:APPDATA\Python\Python314",
+                          "$env:APPDATA\Python\Python313")) {
+        $pyExe = Join-Path $pyDir "python.exe"
+        if (Test-Path $pyExe) { $candidates += $pyExe }
     }
-    if ([int]$pyMajor -eq 3 -and [int]$pyMinor -ge 13) {
-        Write-Host "WARNING: Python $pyFull detected. ddddocr depends on opencv-python which may" -ForegroundColor Yellow
-        Write-Host "  not have wheels for Python 3.13+ yet. If install fails, use Python 3.11–3.12." -ForegroundColor Yellow
-        Write-Host "  conda create -n elang python=3.12 && conda activate elang" -ForegroundColor Yellow
-        Write-Host ""
-    }
-    Write-Host "[OK] Python: $pythonVer" -ForegroundColor Green
-} catch {
-    Write-Host "ERROR: Python not found. Install Python 3.8+ from https://python.org" -ForegroundColor Red
+    # Fall back to whatever `where.exe python` finds, filtering for Windows-native paths
+    $whereResults = & where.exe python 2>$null | Where-Object { $_ -match '\.exe$' -and $_ -notmatch 'msys|cygwin|mingw' }
+    foreach ($r in $whereResults) { if ($r -notin $candidates) { $candidates += $r } }
+    # Last resort: bare python (might be MSYS2)
+    try { $barePath = (Get-Command python -ErrorAction Stop).Source; if ($barePath -notin $candidates) { $candidates += $barePath } } catch {}
+    return $candidates
+}
+
+function Get-VenvPython {
+    param([string]$VenvDir)
+    # Detect venv layout: Windows uses Scripts/, MSYS2/Cygwin uses bin/
+    $winPath  = Join-Path $VenvDir "Scripts\python.exe"
+    $unixPath = Join-Path $VenvDir "bin\python.exe"
+    if (Test-Path $winPath)  { return $winPath }
+    if (Test-Path $unixPath) { return $unixPath }
+    # Try without .exe extension
+    $unixScript = Join-Path $VenvDir "bin\python"
+    if (Test-Path $unixScript) { return $unixScript }
+    return $null
+}
+
+$NATIVE_PYTHONS = @(Find-NativePython)
+if ($NATIVE_PYTHONS.Count -eq 0) {
+    Write-Host "ERROR: No Python found. Install Python 3.11–3.12 from https://python.org" -ForegroundColor Red
     exit 1
 }
+$PYTHON_EXE = $NATIVE_PYTHONS[0]
+
+# Warn if the selected Python looks non-Windows (MSYS2/Cygwin)
+if ($PYTHON_EXE -match 'msys|cygwin|mingw') {
+    Write-Host "WARNING: Selected Python appears to be MSYS2/Cygwin:" -ForegroundColor Yellow
+    Write-Host "  $PYTHON_EXE" -ForegroundColor Yellow
+    Write-Host "  This creates Unix-layout venvs. Consider installing native Windows Python." -ForegroundColor Yellow
+    Write-Host "  https://python.org" -ForegroundColor Yellow
+    Write-Host ""
+}
+
+Write-Host "Using Python: $PYTHON_EXE" -ForegroundColor Green
+Write-Host ""
+
+# Check Python version
+$pyFull = & $PYTHON_EXE -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+$pyMajor, $pyMinor = $pyFull -split '\.'
+if ([int]$pyMajor -lt 3 -or ([int]$pyMajor -eq 3 -and [int]$pyMinor -lt 8)) {
+    Write-Host "ERROR: Python 3.8+ required, found $pyFull" -ForegroundColor Red
+    exit 1
+}
+Write-Host "[OK] Python $pyFull" -ForegroundColor Green
 
 # Copy skill files (before venv so SKILL.md is in place)
 Write-Host ""
@@ -47,9 +89,13 @@ Write-Host "[OK] Files copied to $SKILL_DIR" -ForegroundColor Green
 # Create virtual environment (isolated from global/conda Python)
 Write-Host ""
 Write-Host "Creating virtual environment..." -ForegroundColor Yellow
-python -m venv "$SKILL_DIR\.venv"
-$VENV_PYTHON = "$SKILL_DIR\.venv\Scripts\python.exe"
-Write-Host "[OK] venv created at $SKILL_DIR\.venv" -ForegroundColor Green
+& $PYTHON_EXE -m venv "$SKILL_DIR\.venv"
+$VENV_PYTHON = Get-VenvPython "$SKILL_DIR\.venv"
+if (-not $VENV_PYTHON) {
+    Write-Host "ERROR: Failed to find python in venv at $SKILL_DIR\.venv" -ForegroundColor Red
+    exit 1
+}
+Write-Host "[OK] venv created at $SKILL_DIR\.venv (layout: $(Split-Path $VENV_PYTHON -Parent | Split-Path -Leaf)/$(Split-Path $VENV_PYTHON -Leaf))" -ForegroundColor Green
 
 # Install Python dependencies into venv
 Write-Host ""
@@ -110,10 +156,12 @@ if ($installAgents -eq "y" -or $installAgents -eq "Y") {
         Copy-Item -Force "$SKILL_DIR\.env" "$AGENTS_DIR\"
     }
     # Create venv for agents dir too
-    python -m venv "$AGENTS_DIR\.venv"
-    $AGENTS_PYTHON = "$AGENTS_DIR\.venv\Scripts\python.exe"
-    & "$AGENTS_PYTHON" -m pip install --upgrade pip -q
-    & "$AGENTS_PYTHON" -m pip install -r "$AGENTS_DIR\assets\requirements.txt" -q
+    & $PYTHON_EXE -m venv "$AGENTS_DIR\.venv"
+    $AGENTS_PYTHON = Get-VenvPython "$AGENTS_DIR\.venv"
+    if ($AGENTS_PYTHON) {
+        & "$AGENTS_PYTHON" -m pip install --upgrade pip -q
+        & "$AGENTS_PYTHON" -m pip install -r "$AGENTS_DIR\assets\requirements.txt" -q
+    }
     Write-Host "[OK] Agent files copied to $AGENTS_DIR" -ForegroundColor Green
 }
 
