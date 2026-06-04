@@ -21,12 +21,6 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 8 ]; };
     echo "ERROR: Python 3.8+ required, found $PY_VER"
     exit 1
 fi
-if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -ge 13 ]; then
-    echo "WARNING: Python $PY_VER detected. ddddocr depends on opencv-python which may"
-    echo "  not have wheels for Python 3.13+ yet. If install fails, use Python 3.11–3.12."
-    echo "  conda create -n elang python=3.12 && conda activate elang"
-    echo ""
-fi
 echo "[OK] Python: $($PYTHON --version)"
 
 # Copy skill files (before venv so SKILL.md is in place)
