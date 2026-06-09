@@ -35,7 +35,26 @@ from playwright.async_api import async_playwright
 from dotenv import load_dotenv
 import ddddocr
 
-# Load .env from skill directory or cwd; run interactive setup if missing
+# ---- Platform-aware IPC paths ----
+# On Windows, Python resolves "/tmp/" to "C:\tmp\". On Linux it stays "/tmp/".
+# We make this explicit so paths are clear regardless of platform.
+import platform as _platform
+if _platform.system() == "Windows":
+    _IPC_ROOT = Path("C:/tmp")
+else:
+    _IPC_ROOT = Path("/tmp")
+
+SCRATCH_DIR = str(_IPC_ROOT / "elang_screenshots")
+CURRENT_FILE = str(_IPC_ROOT / "elang_current.json")
+SIGNAL_FILE = str(_IPC_ROOT / "elang_signal.json")
+CHECKPOINT_FILE = str(_IPC_ROOT / "elang_checkpoint.json")
+
+# ---- Output buffering ----
+# When stdout is not a TTY (e.g. run via Claude Code), Python buffers output.
+# Force line-buffered mode so the AI can read progress in real time.
+sys.stdout.reconfigure(line_buffering=True)
+
+# ---- Load .env from skill directory or cwd ----
 _SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _ENV_PATHS = [
     os.path.join(_SKILL_DIR, ".env"),
@@ -44,12 +63,13 @@ _ENV_PATHS = [
 _ENV_LOADED = False
 for _p in _ENV_PATHS:
     if os.path.exists(_p):
-        load_dotenv(_p)
+        # Use encoding='utf-8-sig' to handle UTF-8 BOM (PowerShell's
+        # Out-File -Encoding utf8 adds a BOM that breaks KEY=VALUE parsing)
+        load_dotenv(_p, encoding='utf-8-sig')
         _ENV_LOADED = True
         break
 
 if not _ENV_LOADED:
-    # Interactive setup
     print("=" * 50)
     print("  First-time setup: ZJU CAS credentials")
     print("  Stored in " + os.path.join(_SKILL_DIR, ".env"))
@@ -57,7 +77,7 @@ if not _ENV_LOADED:
     _uid = input("Student ID (学号): ").strip()
     _pwd = input("CAS Password: ").strip()
     _env_path = os.path.join(_SKILL_DIR, ".env")
-    with open(_env_path, "w") as _f:
+    with open(_env_path, "w", encoding="utf-8") as _f:
         _f.write(f"CAS_USERNAME={_uid}\nCAS_PASSWORD={_pwd}\n")
     load_dotenv(_env_path)
     print(f"Credentials saved to {_env_path}")
@@ -65,12 +85,6 @@ if not _ENV_LOADED:
 CAS_USERNAME = os.getenv("CAS_USERNAME", "")
 CAS_PASSWORD = os.getenv("CAS_PASSWORD", "")
 _ocr = ddddocr.DdddOcr(show_ad=False)
-
-# ---- File paths ----
-SCRATCH_DIR = "/tmp/elang_screenshots"
-CURRENT_FILE = "/tmp/elang_current.json"
-SIGNAL_FILE = "/tmp/elang_signal.json"
-CHECKPOINT_FILE = "/tmp/elang_checkpoint.json"
 
 # ---- Tuning constants ----
 CHECKPOINT_INTERVAL = 50  # Pause every N articles for user confirmation
