@@ -39,13 +39,13 @@ Three CLI entry points map to three async functions:
 
 ### File IPC protocol (the core integration point)
 
-The script and AI communicate via JSON files in `C:/tmp/` (hardcoded — not portable to non-Windows):
+The script and AI communicate via JSON files. The base directory is platform-aware: `C:/tmp/` on Windows, `/tmp/` on Linux/macOS.
 
 | File | Writer | Purpose |
 |------|--------|---------|
-| `C:/tmp/elang_current.json` | Script | Current article content + `status: "waiting_for_ai"` |
-| `C:/tmp/elang_signal.json` | AI | Answers (`status: "answers_ready"`) or commands (`skip`, `continue`, `stop`) |
-| `C:/tmp/elang_checkpoint.json` | Script | Resume state: `completed_categories[]`, `total_submitted` |
+| `<tmp>/elang_current.json` | Script | Current article content + `status: "waiting_for_ai"` |
+| `<tmp>/elang_signal.json` | AI | Answers (`status: "answers_ready"`) or commands (`skip`, `continue`, `stop`) |
+| `<tmp>/elang_checkpoint.json` | Script | Resume state: `completed_categories[]`, `total_submitted` |
 
 **Flow per article:**
 1. Script writes `elang_current.json` with passage text, questions array, options

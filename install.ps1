@@ -130,13 +130,12 @@ if (-not (Test-Path "$SKILL_DIR\.env")) {
     $pass = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
         [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass)
     )
-    @"
-CAS_USERNAME=$studentId
-CAS_PASSWORD=$pass
-"@ | Out-File -FilePath "$SKILL_DIR\.env" -Encoding utf8
+    # Write UTF-8 WITHOUT BOM - python-dotenv chokes on BOM
+    $envContent = "CAS_USERNAME=$studentId`nCAS_PASSWORD=$pass`n"
+    [System.IO.File]::WriteAllText("$SKILL_DIR\.env", $envContent, [System.Text.UTF8Encoding]::new($false))
     Write-Host "[OK] Credentials saved to .env" -ForegroundColor Green
 } else {
-    Write-Host "[OK] .env already exists — skipping credential setup" -ForegroundColor Green
+    Write-Host "[OK] .env already exists - skipping credential setup" -ForegroundColor Green
 }
 
 # Also install to ~/.agents/
