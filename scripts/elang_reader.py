@@ -271,7 +271,8 @@ async def get_article_list(page):
             continue
         if line in skip_words or any(k in line for k in skip_words):
             continue
-        if not (line[0].isascii() and line[0].isalpha()):
+        # Allow titles starting with letters in any script (English, Chinese, etc.)
+        if not line[0].isalpha():
             continue
         # Check if previous non-empty line indicates completion
         prev = lines[i - 1].strip() if i > 0 else ""
@@ -835,12 +836,21 @@ async def mode_batch_all(start_cat=0):
             await page.goto("about:blank")
             await page.wait_for_timeout(500)
             await page.goto(learn_url, wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(4000)
+            # Wait for SPA to render article list (retry with increasing wait)
+            for _ in range(CAT_LOAD_RETRIES):
+                await page.wait_for_timeout(1000)
+                body = await page.evaluate("() => document.body.innerText")
+                if "..." not in body and len(body.split("\n")) > 5:
+                    break
             # If CAS redirected us to /#/home, retry (2nd goto lands correctly)
             if "/#/home" in page.url or "learn" not in page.url:
                 print(f"[elang]   landed on home, retrying...")
                 await page.goto(learn_url, wait_until="domcontentloaded", timeout=30000)
-                await page.wait_for_timeout(4000)
+                for _ in range(CAT_LOAD_RETRIES):
+                    await page.wait_for_timeout(1000)
+                    body = await page.evaluate("() => document.body.innerText")
+                    if "..." not in body and len(body.split("\n")) > 5:
+                        break
             print(f"[elang]   nav URL: {page.url}")
 
             article_infos = await get_article_list(page)
