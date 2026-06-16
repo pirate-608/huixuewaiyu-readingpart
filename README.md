@@ -24,7 +24,7 @@ Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.
 ### 1. 安装
 
 ```bash
-git clone https://gitee.com/tian_haoyuan/huixuewaiyu-readingpart.git
+git clone https://github.com／pirate-608/huixuewaiyu-readingpart.git
 cd huixuewaiyu-readingpart
 
 # Linux / macOS / Git Bash
