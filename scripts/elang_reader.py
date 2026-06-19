@@ -86,6 +86,76 @@ CAS_USERNAME = os.getenv("CAS_USERNAME", "")
 CAS_PASSWORD = os.getenv("CAS_PASSWORD", "")
 _ocr = ddddocr.DdddOcr(show_ad=False)
 
+# ---- Answer bank ----
+# Pre-built answer database from forums.  Article titles are matched against
+# references/answers.json to skip the AI round-trip for known articles.
+_ANSWER_BANK = {}
+_ANSWER_BANK_PATHS = [
+    os.path.join(_SKILL_DIR, "references", "answers.json"),
+    os.path.join(os.getcwd(), "references", "answers.json"),
+]
+for _abp in _ANSWER_BANK_PATHS:
+    if os.path.exists(_abp):
+        try:
+            with open(_abp, "r", encoding="utf-8") as _f:
+                _bank = json.load(_f)
+            for _art in _bank.get("articles", []):
+                _ans = _art.get("answers")
+                if not _ans or _ans.get("format") == "unknown":
+                    continue
+                _title = _art.get("title", "")
+                # Normalize title for matching
+                _key = re.sub(r'[^a-zA-Z0-9一-鿿]', '', _title.lower())
+                if _key and len(_key) >= 6:
+                    _ANSWER_BANK[_key] = _ans
+            print(f"[elang] Answer bank loaded: {len(_ANSWER_BANK)} entries from {_abp}")
+            break
+        except Exception as _e:
+            print(f"[elang] WARNING: Failed to load answer bank {_abp}: {_e}")
+
+
+def _normalize_title(title):
+    """Strip everything but letters/digits/CJK for title matching."""
+    return re.sub(r'[^a-zA-Z0-9一-鿿]', '', (title or "").lower())
+
+
+def _match_answer_bank(article_title):
+    """Look up an article title in the answer bank.
+    Returns (answers_dict, match_info) or (None, None).
+    The answers_dict has .format, .letters, .fill_in_blank fields.
+    """
+    if not _ANSWER_BANK:
+        return None, None
+    art_key = _normalize_title(article_title)
+    if not art_key or len(art_key) < 6:
+        return None, None
+
+    # 1) Exact match
+    if art_key in _ANSWER_BANK:
+        return _ANSWER_BANK[art_key], "exact"
+
+    # 2) Substring match: article title contains bank key or vice versa
+    for bank_key, bank_ans in _ANSWER_BANK.items():
+        if len(bank_key) >= 10 and (bank_key in art_key or art_key in bank_key):
+            return bank_ans, f"substring ({bank_key[:30]}…)"
+
+    # 3) Word-level overlap
+    art_words = set(art_key.split())
+    best_score, best_entry = 0, None
+    for bank_key, bank_ans in _ANSWER_BANK.items():
+        bank_words = set(bank_key.split())
+        if not art_words or not bank_words:
+            continue
+        overlap = len(art_words & bank_words)
+        score = overlap / max(len(art_words | bank_words), 1)
+        if score > 0.7 and score > best_score:
+            best_score, best_entry = score, bank_ans
+    if best_entry:
+        return best_entry, f"fuzzy ({best_score:.0%})"
+
+    return None, None
+
+
 # ---- Tuning constants ----
 CHECKPOINT_INTERVAL = 50  # Pause every N articles for user confirmation
 AI_TIMEOUT = 120  # Max seconds to wait for AI answers per article
@@ -680,21 +750,42 @@ async def process_articles(page, article_infos, start_counter, learn_hash):
         ) as f:
             json.dump(content, f, ensure_ascii=False, indent=2)
 
-        # Request AI answers
-        article_data = {
-            "article_index": i,
-            "article_name": name,
-            "article_number": article_num,
-            "total_remaining": total - i,
-            "url": praxis_url,
-            "title": content["title"],
-            "passage": content["passage"][:5000],
-            "questions": content["questions"],
-            "answers": [],
-            "status": "waiting_for_ai",
-        }
+        # ---- Check answer bank first ----
+        bank_ans, match_info = _match_answer_bank(content["title"])
+        if not bank_ans:
+            bank_ans, match_info = _match_answer_bank(name)
+        if bank_ans and bank_ans.get("format") in ("letter", "letter_and_fill"):
+            letters = bank_ans.get("letters", [])
+            letter_map = {'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, '?': 0}
+            data = {
+                "status": "answers_ready",
+                "answers": [[idx, letter_map.get(L.upper(), 0)]
+                           for idx, L in enumerate(letters)],
+            }
+            print(f"  [BANK] Matched ({match_info}), {len(letters)} answers from bank")
+        elif bank_ans:
+            # Fill-in-blank or other format we can't auto-submit — still need AI
+            print(f"  [BANK] Found but format={bank_ans.get('format')}, falling back to AI")
+            data = None
+        else:
+            data = None
 
-        data = await request_ai_answers(article_data)
+        # If not in bank, fall back to AI
+        if data is None:
+            article_data = {
+                "article_index": i,
+                "article_name": name,
+                "article_number": article_num,
+                "total_remaining": total - i,
+                "url": praxis_url,
+                "title": content["title"],
+                "passage": content["passage"][:5000],
+                "questions": content["questions"],
+                "answers": [],
+                "status": "waiting_for_ai",
+            }
+
+            data = await request_ai_answers(article_data)
 
         if data and data.get("status") == "skip":
             print(f"  [SKIP] AI requested skip")

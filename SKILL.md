@@ -100,8 +100,9 @@ Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业
 1. Opens Edge browser — auto-fills ZJU CAS login (credentials from `.env`)
 2. Navigates category pages, extracts article lists (Vue data + text fallback)
 3. For each uncompleted article: clicks in, extracts passage + questions via DOM
-4. Writes content to `$IPC_DIR/elang_current.json` → **the script now pauses and waits**
-5. At this point, you (the AI) switch to **Mode 2** to read and answer
+4. Checks `references/answers.json` — if the article title matches a known answer, submits instantly without AI
+5. Otherwise writes content to `$IPC_DIR/elang_current.json` → **the script now pauses and waits**
+6. At this point, you (the AI) switch to **Mode 2** to read and answer
 6. Script calls Vue `check_answer(qIdx, optIdx)` + `to_submit()` to submit
 7. Returns to learn page, continues; saves checkpoint after each category
 8. CAPTCHA auto-solved via ddddocr (4-digit numeric)
@@ -185,6 +186,12 @@ The script polls every 1 second and picks up the file within 2 seconds.
 ## CAPTCHA
 
 Auto-solved via ddddocr OCR. Captcha is 4-digit numeric, shown in a `.Verify-box` popup after ~10 consecutive articles. Falls back to manual solve if OCR fails. Once captcha appears, proactively checks on every subsequent article entry.
+
+## Answer bank
+
+`references/answers.json` contains pre-built answers from forums (93 articles). During Mode 1, the script matches article titles against this bank before falling back to AI. If a match is found with `letter` or `letter_and_fill` format, answers are submitted instantly — no AI round-trip needed.
+
+To add more answers, append to `references/answers` and run `python references/parse_answers.py` to regenerate the JSON.
 
 ## Requirements
 
