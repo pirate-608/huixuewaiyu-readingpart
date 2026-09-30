@@ -68,6 +68,7 @@ packages = ["src/elang"]
 # `importlib.resources` (same approach as the answer bank), falling back to the
 # repo layout for development.
 "SKILL.md" = "elang/share/SKILL.md"
+"README.md" = "elang/share/README.md"
 ".env.example" = "elang/share/.env.example"
 "CLAUDE.md" = "elang/share/CLAUDE.md"
 "MIGRATION_CHECKPOINT.md" = "elang/share/MIGRATION_CHECKPOINT.md"
