@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*elang_reader.py *)",
+      "Bash(*elang_mcp.py *)",
+      "Bash(*doctor.py *)",
+      "Bash(*setup.py *)",
+      "Bash(*config.py *)",
+      "Bash(*init_env.py *)",
+      "Read(*/elang_*.json)",
+      "Write(*/elang_*.json)"
+    ]
+  }
+}

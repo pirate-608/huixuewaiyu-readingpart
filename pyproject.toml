@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "elang-reading"
+version = "0.1.0"
+description = "Playwright automation for 慧学外语 (elang.zju.edu.cn) English reading exercises"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["playwright", "automation", "elang", "zju", "mcp"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+
+# Only what is needed to RUN. The teaching/docs files (CLAUDE.md,
+# MIGRATION_CHECKPOINT.md, references/, archive/) deliberately stay out.
+#
+# playwright is upper-bounded on purpose: each release expects its own browser
+# build (1.60 -> chromium-1223), so a careless bump demands a download the user
+# may not be able to make. Move this bound together with the browser.
+dependencies = [
+  "playwright>=1.49,<1.61",
+  "python-dotenv>=1.0.0",
+  "mcp>=1.2",
+]
+
+[project.optional-dependencies]
+# Automatic captcha OCR. Heavy (onnxruntime + opencv); the solver degrades to the
+# vision/manual hand-off when absent, so this stays optional.
+ocr = ["ddddocr>=1.5.0", "Pillow>=10.0.0"]
+
+[project.scripts]
+elang = "elang.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/pirate-608/huixuewaiyu-readingpart"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/elang"]
+
+# The wheel ships FLAT modules inside `elang/`, mirroring the repo's scripts/
+# directory. `elang/__init__.py` adds its own directory to sys.path so
+# `import elang_reader` keeps working without rewriting any import statement.
+[tool.hatch.build.targets.wheel.force-include]
+"scripts/elang_reader.py" = "elang/elang_reader.py"
+"scripts/elang_session.py" = "elang/elang_session.py"
+"scripts/elang_mcp.py" = "elang/elang_mcp.py"
+"scripts/config.py" = "elang/config.py"
+"scripts/doctor.py" = "elang/doctor.py"
+"scripts/init_env.py" = "elang/init_env.py"
+"scripts/install_browser.py" = "elang/install_browser.py"
+"scripts/install_skill.py" = "elang/install_skill.py"
+"scripts/setup_mcp.py" = "elang/setup_mcp.py"
+# Sourced from references/ on purpose: that stays the SINGLE authoritative copy,
+# so the packaged data cannot drift from the repo's. (Copying it into
+# src/elang/data/ made two tracked copies of the same file.)
+"references/answers.json" = "elang/data/answers.json"
+
+# The skill payload travels inside the wheel too, under `elang/share/`.
+#
+# Why: `elang install-skill` must work from the INSTALLED tool, without a repo
+# checkout. Previously it resolved its payload relative to `__file__/../..`, which
+# inside site-packages points at `Lib/`, so every file looked missing and the
+# command silently copied nothing. `install_skill.py` now resolves these through
+# `importlib.resources` (same approach as the answer bank), falling back to the
+# repo layout for development.
+"SKILL.md" = "elang/share/SKILL.md"
+".env.example" = "elang/share/.env.example"
+"CLAUDE.md" = "elang/share/CLAUDE.md"
+"MIGRATION_CHECKPOINT.md" = "elang/share/MIGRATION_CHECKPOINT.md"
+"MCP_DESIGN.md" = "elang/share/MCP_DESIGN.md"
+"DISTRIBUTION.md" = "elang/share/DISTRIBUTION.md"
+"references/parse_answers.py" = "elang/share/parse_answers.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/elang",
+  "scripts/*.py",
+  "references/answers.json",
+  "README.md",
+  "requirements.txt",
+]

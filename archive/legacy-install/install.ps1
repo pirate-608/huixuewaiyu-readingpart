@@ -1,5 +1,9 @@
 # Install huixuewaiyu-readingpart skill for Claude Code (Windows)
 # Usage: powershell -ExecutionPolicy Bypass -File install.ps1
+#        powershell -ExecutionPolicy Bypass -File install.ps1 -Sync   # files only
+param(
+    [switch]$Sync
+)
 
 $ErrorActionPreference = "Stop"
 $SKILL_NAME = "huixuewaiyu-readingpart"
@@ -80,14 +84,45 @@ New-Item -ItemType Directory -Force -Path "$SKILL_DIR\scripts" | Out-Null
 New-Item -ItemType Directory -Force -Path "$SKILL_DIR\references" | Out-Null
 New-Item -ItemType Directory -Force -Path "$SKILL_DIR\assets" | Out-Null
 Copy-Item -Force "$SCRIPT_DIR\scripts\elang_reader.py" "$SKILL_DIR\scripts\"
+# review.py is the answering half of the IPC protocol (passage + questions in,
+# answers out); the solver is not usable without it.
+Copy-Item -Force "$SCRIPT_DIR\scripts\review.py" "$SKILL_DIR\scripts\"
+Copy-Item -Force "$SCRIPT_DIR\scripts\elang_session.py" "$SKILL_DIR\scripts\"
+Copy-Item -Force "$SCRIPT_DIR\scripts\elang_mcp.py" "$SKILL_DIR\scripts\"
 Copy-Item -Force "$SCRIPT_DIR\references\api_reference.md" "$SKILL_DIR\references\"
+# Answer bank — without answers.json the solver silently falls back to the AI for
+# every article, so these must ship with the skill.
+Copy-Item -Force "$SCRIPT_DIR\references\answers.json" "$SKILL_DIR\references\"
+Copy-Item -Force "$SCRIPT_DIR\references\parse_answers.py" "$SKILL_DIR\references\"
 Copy-Item -Force "$SCRIPT_DIR\SKILL.md" "$SKILL_DIR\"
+# CLAUDE.md / MIGRATION_CHECKPOINT.md travel with the skill so the runtime copy
+# carries the same verified facts and pitfalls.
+if (Test-Path "$SCRIPT_DIR\CLAUDE.md") {
+    Copy-Item -Force "$SCRIPT_DIR\CLAUDE.md" "$SKILL_DIR\"
+}
+if (Test-Path "$SCRIPT_DIR\MIGRATION_CHECKPOINT.md") {
+    Copy-Item -Force "$SCRIPT_DIR\MIGRATION_CHECKPOINT.md" "$SKILL_DIR\"
+}
+if (Test-Path "$SCRIPT_DIR\MCP_DESIGN.md") {
+    Copy-Item -Force "$SCRIPT_DIR\MCP_DESIGN.md" "$SKILL_DIR\"
+}
 Copy-Item -Force "$SCRIPT_DIR\.env.example" "$SKILL_DIR\assets\"
 Copy-Item -Force "$SCRIPT_DIR\requirements.txt" "$SKILL_DIR\assets\"
 Write-Host "[OK] Files copied to $SKILL_DIR" -ForegroundColor Green
 
 # Create virtual environment (isolated from global/conda Python)
+# -Sync refreshes the skill payload only: skip venv creation, pip and the browser
+# download so an update is a fast file copy.
 Write-Host ""
+if ($Sync) {
+    $VENV_PYTHON = Get-VenvPython "$SKILL_DIR\.venv"
+    if ($VENV_PYTHON) {
+        Write-Host "[OK] -Sync: reusing existing venv, skipping pip/playwright" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: -Sync given but no venv found at $SKILL_DIR\.venv" -ForegroundColor Yellow
+        Write-Host "         Run without -Sync to create it." -ForegroundColor Yellow
+    }
+} else {
 Write-Host "Creating virtual environment..." -ForegroundColor Yellow
 & $PYTHON_EXE -m venv "$SKILL_DIR\.venv"
 $VENV_PYTHON = Get-VenvPython "$SKILL_DIR\.venv"
@@ -117,6 +152,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Run manually: $VENV_PYTHON -m playwright install chromium" -ForegroundColor Yellow
 }
 Write-Host "[OK] Chromium ready" -ForegroundColor Green
+}
 
 # Setup .env
 Write-Host ""
@@ -147,7 +183,10 @@ if ($installAgents -eq "y" -or $installAgents -eq "Y") {
     New-Item -ItemType Directory -Force -Path "$AGENTS_DIR\references" | Out-Null
     New-Item -ItemType Directory -Force -Path "$AGENTS_DIR\assets" | Out-Null
     Copy-Item -Force "$SKILL_DIR\scripts\elang_reader.py" "$AGENTS_DIR\scripts\"
+    Copy-Item -Force "$SKILL_DIR\scripts\review.py" "$AGENTS_DIR\scripts\"
     Copy-Item -Force "$SKILL_DIR\references\api_reference.md" "$AGENTS_DIR\references\"
+    Copy-Item -Force "$SKILL_DIR\references\answers.json" "$AGENTS_DIR\references\"
+    Copy-Item -Force "$SKILL_DIR\references\parse_answers.py" "$AGENTS_DIR\references\"
     Copy-Item -Force "$SKILL_DIR\SKILL.md" "$AGENTS_DIR\"
     Copy-Item -Force "$SKILL_DIR\assets\.env.example" "$AGENTS_DIR\assets\"
     Copy-Item -Force "$SKILL_DIR\assets\requirements.txt" "$AGENTS_DIR\assets\"

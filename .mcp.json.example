@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "elang-reading": {
+      "command": "{{PYTHON}}",
+      "args": [
+        "{{SCRIPT}}"
+      ],
+      "env": {
+        "ELANG_TMP_DIR": "{{IPC_DIR}}"
+      }
+    }
+  }
+}

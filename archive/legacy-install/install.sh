@@ -28,8 +28,21 @@ echo ""
 echo "Copying skill files..."
 mkdir -p "$SKILL_DIR/scripts" "$SKILL_DIR/references" "$SKILL_DIR/assets"
 cp "$SCRIPT_DIR/scripts/elang_reader.py" "$SKILL_DIR/scripts/"
+# review.py is the answering half of the IPC protocol (passage + questions in,
+# answers out); the solver is not usable without it.
+cp "$SCRIPT_DIR/scripts/review.py" "$SKILL_DIR/scripts/"
+cp "$SCRIPT_DIR/scripts/elang_session.py" "$SKILL_DIR/scripts/"
+cp "$SCRIPT_DIR/scripts/elang_mcp.py" "$SKILL_DIR/scripts/"
 cp "$SCRIPT_DIR/references/api_reference.md" "$SKILL_DIR/references/"
+# Answer bank — without answers.json the solver falls back to the AI for every
+# article, so these must ship with the skill.
+cp "$SCRIPT_DIR/references/answers.json" "$SKILL_DIR/references/"
+cp "$SCRIPT_DIR/references/parse_answers.py" "$SKILL_DIR/references/"
 cp "$SCRIPT_DIR/SKILL.md" "$SKILL_DIR/"
+# Carry the verified facts and pitfalls alongside the runtime copy
+[ -f "$SCRIPT_DIR/CLAUDE.md" ] && cp "$SCRIPT_DIR/CLAUDE.md" "$SKILL_DIR/"
+[ -f "$SCRIPT_DIR/MIGRATION_CHECKPOINT.md" ] && cp "$SCRIPT_DIR/MIGRATION_CHECKPOINT.md" "$SKILL_DIR/"
+[ -f "$SCRIPT_DIR/MCP_DESIGN.md" ] && cp "$SCRIPT_DIR/MCP_DESIGN.md" "$SKILL_DIR/"
 cp "$SCRIPT_DIR/.env.example" "$SKILL_DIR/assets/"
 cp "$SCRIPT_DIR/requirements.txt" "$SKILL_DIR/assets/"
 echo "[OK] Files copied to $SKILL_DIR"
@@ -93,7 +106,10 @@ if [ "$INSTALL_AGENTS" = "y" ] || [ "$INSTALL_AGENTS" = "Y" ]; then
     AGENTS_DIR="$HOME/.agents/$SKILL_NAME"
     mkdir -p "$AGENTS_DIR/scripts" "$AGENTS_DIR/references" "$AGENTS_DIR/assets"
     cp "$SKILL_DIR/scripts/elang_reader.py" "$AGENTS_DIR/scripts/"
+    cp "$SKILL_DIR/scripts/review.py" "$AGENTS_DIR/scripts/"
     cp "$SKILL_DIR/references/api_reference.md" "$AGENTS_DIR/references/"
+    cp "$SKILL_DIR/references/answers.json" "$AGENTS_DIR/references/"
+    cp "$SKILL_DIR/references/parse_answers.py" "$AGENTS_DIR/references/"
     cp "$SKILL_DIR/SKILL.md" "$AGENTS_DIR/"
     cp "$SKILL_DIR/assets/.env.example" "$AGENTS_DIR/assets/"
     cp "$SKILL_DIR/assets/requirements.txt" "$AGENTS_DIR/assets/"
