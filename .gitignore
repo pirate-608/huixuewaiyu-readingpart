@@ -1,6 +1,11 @@
 # 凭据
 .env
 
+# 本机专属的 MCP 注册（含绝对路径）。
+# `.mcp.json.example` 是模板、会入库；实际文件由
+# `python scripts/setup_mcp.py` 生成。
+.mcp.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -20,7 +25,6 @@ env/
 *.swp
 *.swo
 *~
-docs
 
 # 操作系统
 .DS_Store
@@ -35,3 +39,6 @@ test-results/
 
 # 其他
 /temp/  
+
+# Playwright 浏览器缓存（工作区内，避免污染系统 ms-playwright）
+.playwright-browsers/

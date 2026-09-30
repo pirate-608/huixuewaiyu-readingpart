@@ -1,4 +1,18 @@
-playwright>=1.40.0
+# Core runtime. Installed into an ISOLATED virtual environment — never rely on a
+# system interpreter's site-packages, since those differ per machine.
+#
+# `mcp` 1.x and 2.x are both supported (the high-level server class was renamed
+# FastMCP -> MCPServer in 2.x; scripts/elang_mcp.py shims both).
+mcp>=1.2
 python-dotenv>=1.0.0
+
+# Pinned to the 1.60 series on purpose. Each Playwright release expects its own
+# browser build (1.60 -> chromium-1223), so an unpinned bump can demand a fresh
+# download that may be unavailable. Change this together with the browser.
+playwright>=1.49,<1.61
+
+# Optional: automatic captcha OCR. Without these the solver still works — it
+# falls back to the vision/manual hand-off (ELANG_CAPTCHA_MANUAL=1, or answering
+# via <ipc>/elang_captcha.json). Heavy (onnxruntime + opencv), so kept optional.
 ddddocr>=1.5.0
 Pillow>=10.0.0

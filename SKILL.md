@@ -5,197 +5,193 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 
 # 慧学外语阅读自动答题
 
-Automates English reading exercises on elang.zju.edu.cn via Playwright + Vue component method calls.
+通过 Playwright 驱动 elang.zju.edu.cn 的 **PC 版界面**，读取文章与题目，
+交由你（agent）作答，再用应用自己的方法提交。
 
-## Platform detection — read this first
-
-Before anything else, determine which platform you're on. The IPC file paths differ:
-
-```bash
-# Run this once to set IPC_DIR:
-if [ -d /c/tmp ]; then
-    IPC_DIR="C:/tmp"          # Windows (Git Bash)
-elif [ -d /tmp ]; then
-    IPC_DIR="/tmp"             # Linux / macOS
-fi
-# The three IPC files are at $IPC_DIR/elang_current.json, $IPC_DIR/elang_signal.json, $IPC_DIR/elang_checkpoint.json
-```
-
-| Platform | `IPC_DIR` | Read/Write tool paths |
-|----------|-----------|----------------------|
-| Windows | `C:/tmp` | `C:/tmp/elang_current.json`, `C:/tmp/elang_signal.json` |
-| Linux/macOS | `/tmp` | `/tmp/elang_current.json`, `/tmp/elang_signal.json` |
-
-All file paths below use `$IPC_DIR` — replace it with the value for your platform.
+> **改动代码前请先读 `MIGRATION_CHECKPOINT.md`** —— 那里记录了站点改版后的
+> 实测事实、被推翻的假设，以及踩过的坑。
 
 ---
 
-## Mode detection
+## 三条必须记住的规则
 
-Two distinct roles. **Determine which applies before doing anything else:**
+**1. 凭据放工作区根目录的 `.env`**
 
-| Condition | Mode | Your role |
-|-----------|------|-----------|
-| User asks to **start** / **run** / **launch** / **刷题** / **开始**, or provides a learn/praxis URL without JSON context | **Mode 1: Orchestrator** | Run the Python script via Bash. The script drives the browser and writes `$IPC_DIR/elang_current.json` when it needs answers. |
-| `$IPC_DIR/elang_current.json` exists with `"status": "waiting_for_ai"` — or — user explicitly pastes article content and asks you to answer | **Mode 2: Backend processor** | Read the JSON, answer the questions, write `$IPC_DIR/elang_signal.json`. Do NOT run the Python script. |
+```
+1. $ELANG_ENV_FILE       显式指定
+2. <工作目录>/.env         工作区根 ← 约定位置
+3. ~/.elang/.env         兜底
+   —— 环境变量 ELANG_CAS_USERNAME / ELANG_CAS_PASSWORD 优先于以上任何文件
+```
 
-**If unsure**, ask: "Are you starting a new automation run, or continuing an already-running script that needs answers?"
+所有 agent 运行命令时的工作目录都是工作区根，所以 `./.env` 天然正确。
+**先运行 `doctor.py` 确认它实际读的是哪个文件**，不要假设。
+
+**2. 浏览器不要预设版本或路径**
+
+需要哪个浏览器构建取决于 Playwright 版本，写死会过时。
+**先跑 `elang doctor`**，它报告浏览器是否可用；缺失时装它：
+`elang install-browser`（默认装到工具私有缓存 `~/.elang/browsers`）。
+
+**3. 不要阻塞等待**
+
+MCP 模式下**没有任何 tool 会等待**：每步立即返回状态与可执行的下一步。
+不要用"挂着等输出"的方式轮询 —— 那会让双方互相等待。
 
 ---
 
-## Mode 1: Orchestrator (start the automation)
-
-### Commands
-
-The skill has its own venv at `~/.claude/skills/huixuewaiyu-readingpart/.venv/`. Always use the venv Python.
-
-**`PYTHONUNBUFFERED=1` is required** — without it, Python buffers stdout when run non-interactively, and you won't see script output.
-
-**Before running**, verify the venv exists. If not, the skill hasn't been installed — tell the user to run `install.sh` / `install.ps1`.
+## 阶段一：确认环境（每次开始前）
 
 ```bash
-# Bash (Git Bash / Linux / macOS)
-SKILL_DIR="$HOME/.claude/skills/huixuewaiyu-readingpart"
-# Auto-detect venv layout (Windows = Scripts/, Unix = bin/)
-if [ -f "$SKILL_DIR/.venv/Scripts/python" ]; then
-    SKILL_PYTHON="$SKILL_DIR/.venv/Scripts/python"
-elif [ -f "$SKILL_DIR/.venv/bin/python" ]; then
-    SKILL_PYTHON="$SKILL_DIR/.venv/bin/python"
-else
-    echo "ERROR: venv not found. Run install.sh first." && exit 1
-fi
-
-# ALL 11 categories (~291 articles), resumable via checkpoint
-PYTHONUNBUFFERED=1 $SKILL_PYTHON $SKILL_DIR/scripts/elang_reader.py batch-all
-
-# Single category
-PYTHONUNBUFFERED=1 $SKILL_PYTHON $SKILL_DIR/scripts/elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
-
-# Single article
-PYTHONUNBUFFERED=1 $SKILL_PYTHON $SKILL_DIR/scripts/elang_reader.py solve "<praxis-url>"
+$PY scripts/doctor.py
 ```
+
+按输出行动：
+
+| 输出 | 行动 |
+|---|---|
+| `browser launch: FAILED` | 运行 `elang install-browser`（或按 doctor 打印的命令） |
+| 报 `EPERM` / `mkdtemp` | 先把 `TEMP`/`TMP` 指向可写目录再试（doctor 会提示） |
+| `env file ... (missing)` | 运行 `$PY scripts/init_env.py` 生成模板 |
+| `username/password MISSING` | 请用户填写 `.env`，**不要**把密码写进日志或对话 |
+| `WARNING: ... OUTSIDE this interpreter's tree` | 依赖是借来的，换台机器会失效；重建隔离 venv |
+| 全部 ok | 继续 |
+
+`$PY` 是本项目的解释器：
 
 ```powershell
-# PowerShell
-$SKILL_DIR = "$env:USERPROFILE\.claude\skills\huixuewaiyu-readingpart"
-$SKILL_PYTHON = "$SKILL_DIR\.venv\Scripts\python.exe"
-if (-not (Test-Path $SKILL_PYTHON)) {
-    $SKILL_PYTHON = "$SKILL_DIR\.venv\bin\python.exe"
-}
-if (-not (Test-Path $SKILL_PYTHON)) {
-    Write-Error "venv not found. Run install.ps1 first."; exit 1
-}
-
-# Run with unbuffered output
-$env:PYTHONUNBUFFERED = 1
-& $SKILL_PYTHON $SKILL_DIR\scripts\elang_reader.py batch-all
-& $SKILL_PYTHON $SKILL_DIR\scripts\elang_reader.py batch "https://elang.zju.edu.cn/#/read/learn?subject_id=14"
-& $SKILL_PYTHON $SKILL_DIR\scripts\elang_reader.py solve "<praxis-url>"
+# Windows
+$PY = ".venv\Scripts\python.exe"
+# Linux / macOS
+PY=.venv/bin/python
 ```
 
-Categories: 道路与交通(3), 历史与文化(22), 文学与艺术(12), 职业与发展(18), 运动与娱乐(6), 学习与教育(59), 商业与经济(26), 科技与创新(38), 社会与政治(36), 自然与农业(22), 家庭与生活(49) — ~291 articles total.
-
-### What happens
-
-1. Opens Edge browser — auto-fills ZJU CAS login (credentials from `.env`)
-2. Navigates category pages, extracts article lists (Vue data + text fallback)
-3. For each uncompleted article: clicks in, extracts passage + questions via DOM
-4. Checks `references/answers.json` — if the article title matches a known answer, submits instantly without AI
-5. Otherwise writes content to `$IPC_DIR/elang_current.json` → **the script now pauses and waits**
-6. At this point, you (the AI) switch to **Mode 2** to read and answer
-6. Script calls Vue `check_answer(qIdx, optIdx)` + `to_submit()` to submit
-7. Returns to learn page, continues; saves checkpoint after each category
-8. CAPTCHA auto-solved via ddddocr (4-digit numeric)
-9. **Every 50 articles**: pauses for user confirmation — write `{"status": "continue"}` or `{"status": "stop"}`
-
-### Configuration (.env)
-
-Copy `.env.example` to `.env` and fill credentials:
-
-```
-CAS_USERNAME=你的学号
-CAS_PASSWORD=你的密码
-```
-
-These are stored locally and never transmitted.
-
-### Resume
-
-Delete `$IPC_DIR/elang_checkpoint.json` to start fresh. Categories in `completed_categories` are skipped on re-run.
+若 `.venv` 不存在，先运行 `python scripts/setup.py`。
 
 ---
 
-## Mode 2: Backend processor (answer questions)
+## 阶段二：使用
 
-**Only enter this mode when `$IPC_DIR/elang_current.json` exists with `"status": "waiting_for_ai"`, or the user explicitly asks you to answer article questions.**
+两种方式**选其一**，不要同时驱动同一个浏览器。
 
-### Step 1: Read the article
+### 方式 A：MCP（推荐，交互更清晰）
 
-Use the **Read tool** with the absolute path `$IPC_DIR/elang_current.json` (e.g. `C:/tmp/elang_current.json` on Windows, `/tmp/elang_current.json` on Linux).
+若宿主已注册 `elang-mcp`，工具以 `mcp__elang__*` 出现：
 
-The JSON contains:
-- `passage` — the reading passage text
-- `questions` — array of `{index, title, question, options: [{label, text}]}`
-- `article_name`, `article_number` — metadata
-
-### Step 2: Answer and write signal
-
-Use the **Write tool** to write your answer to `$IPC_DIR/elang_signal.json`:
-
-```json
-// Submit answers as [question_index, option_index] tuples
-// (0=A, 1=B, 2=C, 3=D, 4=E; True/False: 0=True, 1=False)
-{"status": "answers_ready", "answers": [[0, 0], [1, 2], [2, 1], [3, 3], [4, 0]]}
-
-// Skip article (fill-in-blank, broken, unreadable)
-{"status": "skip"}
-
-// Checkpoint confirmation (every 50 articles)
-{"status": "continue"}
-
-// Stop after current category
-{"status": "stop"}
+```
+elang_start(dry_run, limit)      打开浏览器并登录
+elang_status()                   查看状态（绝不启动浏览器）
+elang_list_subjects()            主题列表
+elang_list_lessons(subject_id)   某主题的文章列表
+elang_open_next()                推进到下一篇 → 返回正文与题目
+elang_submit_answers(answers)    提交答案
+elang_get_captcha()              取验证码图片
+elang_solve_captcha(code)        提交验证码
+elang_skip_article()             原样提交
+elang_stop()                     关闭
 ```
 
-The script polls every 1 second and picks up the file within 2 seconds.
+典型循环：
 
-### Answering strategy
+```
+elang_start
+  → elang_open_next            状态 awaiting_answers 或 awaiting_captcha
+  → （若 awaiting_captcha）elang_get_captcha → 读图 → elang_solve_captcha
+  → 按正文作答 → elang_submit_answers
+  → 重复 open_next 直到 finished
+elang_stop
+```
 
-- Read the passage carefully, answer each question based on the passage content
-- Return answers for ALL questions
-- If the passage or questions are unreadable/broken, use `{"status": "skip"}`
-- If you cannot determine an answer confidently (missing context, unclear format), use `{"status": "skip"}`
-- Do NOT run the Python script in this mode — it's already running and waiting
+**作答格式**：`answers` 是 `[[qIndex, value], ...]`
+
+- `qIndex` 为 **0 起**的题号（`open_next` 的返回值里有）
+- **选择题**：`value` 是 0 起的选项序号
+- **填空题**：`value` 是**数组**，每个空一个值，长度必须等于 `blanks`
+
+提交后返回值含 `echo` 与 `incomplete` —— **务必检查 `incomplete`**，
+它列出没有回读为已答的题。
+
+### 方式 B：CLI
+
+```bash
+$PY scripts/elang_reader.py batch-all                        # 全部主题（220 篇）
+$PY scripts/elang_reader.py batch 26                         # 单个主题
+$PY scripts/elang_reader.py batch-all --subjects-only        # 只列主题，零风险
+$PY scripts/elang_reader.py batch-all --limit 1 --dry-run    # 安全试跑
+```
+
+**首次务必先 `--subjects-only` 或 `--limit 1 --dry-run`**，
+确认路径与登录都正常，再放开全量。
 
 ---
 
-## IPC file protocol reference
+## 阶段三：验证码
 
-| File | Writer | Windows path | Linux path |
-|------|--------|-------------|------------|
-| `elang_current.json` | Script | `C:/tmp/elang_current.json` | `/tmp/elang_current.json` |
-| `elang_signal.json` | AI | `C:/tmp/elang_signal.json` | `/tmp/elang_signal.json` |
-| `elang_checkpoint.json` | Script | `C:/tmp/elang_checkpoint.json` | `/tmp/elang_checkpoint.json` |
+验证码是**题目页的闸门** —— 题目只有通过验证码后才加载。处理顺序：
 
-## Auto-skipped articles (by the script)
+1. **ddddocr 自动识别**（最多 3 次；若图片没换就停止重试，避免死循环）
+2. **交接**：图片写到 `<ipc>/elang_captcha_image.png`，
+   请求写到 `<ipc>/elang_captcha_request.json`
+   → 你读图片，把 `{"captcha_code":"XXXX"}` 写到 `<ipc>/elang_captcha.json`
+3. **人工**：设 `ELANG_CAPTCHA_MANUAL=1`，脚本完全不碰 `verifyCode`，
+   等用户在页面上自己输入
 
-- Already completed (Vue `status === 2` or text `已学`)
-- No questions or unrecognised question format — submits empty
-- Navigation failure (no log_id / resources_id)
+**为什么人工模式要"完全不碰"**：输错会让应用刷新图片，
+从而**清掉用户已输入的内容**。
 
-## CAPTCHA
+MCP 模式下用 `elang_get_captcha` / `elang_solve_captcha`，逻辑相同。
 
-Auto-solved via ddddocr OCR. Captcha is 4-digit numeric, shown in a `.Verify-box` popup after ~10 consecutive articles. Falls back to manual solve if OCR fails. Once captcha appears, proactively checks on every subsequent article entry.
+---
 
-## Answer bank
+## 关于 IPC 目录
 
-`references/answers.json` contains pre-built answers from forums (93 articles). During Mode 1, the script matches article titles against this bank before falling back to AI. If a match is found with `letter` or `letter_and_fill` format, answers are submitted instantly — no AI round-trip needed.
+`<ipc>` = `$ELANG_TMP_DIR`，否则 Windows 用 `C:/tmp`、其他平台 `/tmp`。
 
-To add more answers, append to `references/answers` and run `python references/parse_answers.py` to regenerate the JSON.
+该目录用于验证码交接与会话保存（`elang_session.json`）。
+**答案不再通过文件传递** —— 旧的 `elang_current.json` / `elang_signal.json`
+协议已归档（见 `archive/README.md`），原因是双方轮询会互相阻塞。
 
-## Requirements
+---
 
-- Python 3.8+
-- Edge browser (Playwright uses `channel="msedge"`)
-- ZJU CAS account with access to elang.zju.edu.cn
-- Install via `install.sh` / `install.ps1` (creates an isolated venv with all dependencies)
+## 站点结构（PC 版）
+
+| 路由 | 组件 | 关键数据 |
+|---|---|---|
+| `#/pc/read/index` | `PcReadIndex` | `$data.listData` |
+| `#/pc/read/learn?subject_id=` | `PcReadLearn` | `$data.resourceList` |
+| `#/pc/read/praxis?log_id=&resources_id=` | `PcReadPraxis` | `$data.jobList` |
+
+- **`toPraxis(item)` 由服务端签发 `log_id`**，所以 praxis URL 不能手工拼
+- **完成状态**用应用自己的 `normalizeStatus`（`status===2` 或 `hisLabel===1`）
+- **作答**：选择题 `selectOption()`；填空题 `insertWordAnswers[jobId]`（每空一个值）
+- **提交**是两步：`openSubmitConfirm()` → `confirmSubmit()`
+
+### Vue 访问的陷阱
+
+`page.evaluate` **返回**对象给的是副本，而 Vue 实例**根本无法序列化到 Python**。
+把实例当参数传回去只会得到空值，所有字段读成 0 —— 这正是曾经
+"同一页面一处说有验证码图、另一处说没有"的原因。
+所以实例**钉在页面里**（`window.__elangPraxisVm` / `window.__elangLearnVm`），
+所有读取都在浏览器内部完成。
+
+---
+
+## 环境要求
+
+- Python 3.11+
+- `uv`（推荐，用于建隔离环境）
+- Chromium 浏览器（用 `doctor.py` 确认）
+- ZJU CAS 账号
+
+**不要**把依赖装进系统 Python，也不要用 `--system-site-packages` 借系统包 ——
+那会让工具换台机器就失效。`doctor.py` 会检测并警告这种情况。
+
+### 沙箱说明（实测）
+
+Playwright **无法**在文件沙箱内启动浏览器：它的 driver 走
+`asyncio.create_subprocess_exec`，在 Windows 上需要**命名**管道，
+而受限沙箱拒绝 `CreateFile("\\.\pipe\...")`（WinError 5）。
+同步 API 也一样（内部就是 asyncio）。
+
+所以驱动浏览器需要更宽的权限；MCP server 也必须在沙箱外运行。
+详见 `MCP_DESIGN.md`。
