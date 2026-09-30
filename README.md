@@ -74,10 +74,25 @@ elang doctor
 想让 agent 直接使用：
 
 ```bash
-elang install-skill
+elang install-skill                                   # 全局，所有检测到的 agent
+elang install-skill --agent claude                    # 只装 Claude Code
+elang install-skill --agent dsh,codex --scope project # 装进当前项目
+elang install-skill --scope all                       # 全局 + 项目
+elang install-skill --check                           # 只看状态
+elang install-skill --uninstall --agent claude
 ```
 
-会注册到 DSH / Codex / Claude Code 各自的 skill 根目录。
+**`--agent`**：`dsh` / `codex` / `claude`（逗号分隔，默认所有检测到的）。
+注意 **DSH 与 Codex 共享 `~/.agents/skills`**，所以给两者安装只写一个目录。
+
+**`--scope`**：
+- `global`（默认）—— 所有项目可用，不在你的仓库里留下任何东西
+- `project` —— 装在项目内，**优先级高于全局**（DSH 把项目根排在 100/200，
+  全局排在 400/500）；因为位于项目内，**可以提交**给协作者
+- `all` —— 两者都装
+
+项目根取当前目录最近的含 `.git` / `pyproject.toml` / `SKILL.md` 的祖先目录，
+也可用 `--project-root` 指定。
 
 ---
 

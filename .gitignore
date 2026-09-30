@@ -40,5 +40,11 @@ test-results/
 # 其他
 /temp/  
 
+# 项目级 skill 安装目标（由 install-skill --scope project 写入）。
+# 想随项目提交 skill（让协作者自动获得）时，删掉这几行即可。
+/.dsh/skills/
+/.agents/skills/
+/.claude/skills/
+
 # Playwright 浏览器缓存（工作区内，避免污染系统 ms-playwright）
 .playwright-browsers/
