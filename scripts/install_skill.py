@@ -59,6 +59,7 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 # `elang <cmd>` as the primary interface.
 PAYLOAD = [
     ("SKILL.md", "SKILL.md"),                              # the contract itself
+    ("README.md", "README.md"),                            # user-facing overview
     ("references/answers.json", "references/answers.json"),  # answer bank
     ("references/parse_answers.py", "references/parse_answers.py"),
     (".env.example", ".env.example"),                      # credential template
@@ -71,8 +72,9 @@ PAYLOAD = [
 
 # Files packaged under `elang/share/` (see pyproject force-include).
 _SHARE_FILES = {
-    "SKILL.md", ".env.example", "CLAUDE.md", "MIGRATION_CHECKPOINT.md",
-    "MCP_DESIGN.md", "DISTRIBUTION.md", "references/parse_answers.py",
+    "SKILL.md", "README.md", ".env.example", "CLAUDE.md",
+    "MIGRATION_CHECKPOINT.md", "MCP_DESIGN.md", "DISTRIBUTION.md",
+    "references/parse_answers.py",
 }
 
 HOME = Path(os.path.expanduser("~"))
