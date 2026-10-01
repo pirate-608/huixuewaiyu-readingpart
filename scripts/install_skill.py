@@ -78,6 +78,7 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 PAYLOAD = [
     ("SKILL.md", "SKILL.md"),                              # the contract itself
     ("README.md", "README.md"),                            # user-facing overview
+    ("SETUP.md", "SETUP.md"),                              # agent install guide
     ("references/answers.json", "references/answers.json"),  # answer bank
     ("references/parse_answers.py", "references/parse_answers.py"),
     (".env.example", ".env.example"),                      # credential template
@@ -90,7 +91,7 @@ PAYLOAD = [
 
 # Files packaged under `elang/share/` (see pyproject force-include).
 _SHARE_FILES = {
-    "SKILL.md", "README.md", ".env.example", "CLAUDE.md",
+    "SKILL.md", "README.md", "SETUP.md", ".env.example", "CLAUDE.md",
     "MIGRATION_CHECKPOINT.md", "MCP_DESIGN.md", "DISTRIBUTION.md",
     "references/parse_answers.py",
 }

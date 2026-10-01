@@ -11,6 +11,13 @@ python-dotenv>=1.0.0
 # download that may be unavailable. Change this together with the browser.
 playwright>=1.49,<1.61
 
+# Needed by `elang setup-mcp` to edit agent configs SAFELY: it parses the file,
+# makes the change structurally, then re-parses to verify and rolls back on
+# failure. Hand-rolled appenders cannot verify, which is the whole point.
+# (TOML reading uses the stdlib `tomllib`; no writer is needed — Codex entries
+# are appended as a rendered table, then verified by parsing.)
+PyYAML>=6.0
+
 # Optional: automatic captcha OCR. Without these the solver still works — it
 # falls back to the vision/manual hand-off (ELANG_CAPTCHA_MANUAL=1, or answering
 # via <ipc>/elang_captcha.json). Heavy (onnxruntime + opencv), so kept optional.

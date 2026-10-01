@@ -4,6 +4,21 @@ Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.
 
 > **致谢** — 本项目基于开源项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 开发，感谢原作者 [shixu2026](https://gitee.com/shixu2026) 的贡献。
 
+## 交给 agent 一句话搞定
+
+不用自己一步步装。把下面这句复制给 agent（DSH / Codex / Claude Code 都行）：
+
+```
+读 https://github.com/pirate-608/huixuewaiyu-readingpart 的 SETUP.md，
+按里面的步骤帮我装好这个工具。我是 <DSH / Codex / Claude Code> 用户。
+```
+
+agent 会读完 [`SETUP.md`](SETUP.md) 里的约定，然后自己完成：装工具 → 装浏览器 →
+生成凭据模板（**密码由你自己填，agent 不读**）→ 注册 skill → 注册 MCP，
+每步都有验证，失败会报原始错误而不是跳过。
+
+想手动装的话看下面的[快速开始](#快速开始)。
+
 ## 特性
 
 - **CAS 自动登录** — 凭据放工作区 `.env`，无需手动登录
