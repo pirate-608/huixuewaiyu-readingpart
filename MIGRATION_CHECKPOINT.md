@@ -2813,3 +2813,79 @@ Chromium is not installed for this tool.
       `playwright install chromium` 改为 `elang install-browser`
 - [ ] 提交推送，使用户能 `uv tool install git+<url>`
 - [ ] 用户重建 `.env`
+
+---
+
+## 38. ✅ `install-skill` 支持指定 agent 与 scope
+
+### 38.1 新接口
+
+```bash
+elang install-skill                                    # 全局，所有检测到的 agent
+elang install-skill --agent claude                     # 只装 Claude Code
+elang install-skill --agent dsh,codex --scope project  # 装进当前项目
+elang install-skill --scope all                        # 全局 + 项目
+elang install-skill --check                            # 只看状态
+elang install-skill --uninstall --agent claude
+```
+
+| 选项 | 取值 |
+|---|---|
+| `--agent`（`--hosts` 为别名） | `dsh` / `codex` / `claude`，逗号分隔 |
+| `--scope` | `global`（默认）/ `project` / `all` |
+| `--project-root` | 覆盖自动探测的项目根 |
+| `--dir` | 直接指定单个 skills 根 |
+
+**项目根探测**：从 cwd 向上找最近的含 `.git` / `pyproject.toml` / `SKILL.md`
+的祖先 —— 因为 agent 可能在项目的子目录里启动。
+
+### 38.2 共享根现在正确标注
+
+**DSH 与 Codex 共享 `~/.agents/skills`**（DSH rank 500）。旧实现会把它列两次；
+现在合并为一行 `codex+dsh/global` —— 一个目录同时服务两者，这是事实而非重复。
+
+### 38.3 🐞 修掉一个静默的卸载失败（严重）
+
+**症状**：`--uninstall` 报告 `removed ...`，但**文件全都还在**。
+
+**根因**：`remove_path` 在 Windows 上对**任何目录**都用 `cmd rmdir`，
+但 **`rmdir` 只能删空目录** —— 对装满了文件的 skill 目录必然失败，
+而 `subprocess.run` 的返回码**从未检查**，于是失败被完全吞掉。
+
+**为什么之前没暴露**：`remove_path` 原本是为 **junction** 写的（`rmdir` 对
+junction 是正确的：只删连接点、不动目标）。测试时用的是 `--copy`，
+但卸载路径从未被真实验证过。
+
+**修复**：
+- 显式判断 junction（`Path.is_junction()`，3.12+；回退到检查
+  `FILE_ATTRIBUTE_REPARSE_POINT`）
+- **只有 junction 用 `rmdir`**；普通目录走 `shutil.rmtree`
+- 失败时**抛异常并上报**，不再吞掉；卸载流程捕获后返回非零
+
+验证：安装（三个根均 copied）→ 卸载（三个根均真正删除，`Test-Path` 全 False）。
+
+### 38.4 另一个修正：默认模式改为 `--copy`
+
+旧默认是 `--link`。但 link 只在**仓库检出**时才有意义（它把宿主指向仓库），
+而装成 tool 后根本没有仓库 —— 结果是"默认行为在分发场景下不可用"。
+现在默认 `--copy`，`--link` 需显式指定。
+
+顺带：`--help` 的中文/破折号在 GBK 控制台乱码，已加 stdout UTF-8 重配。
+
+### 38.5 gitignore 项目级安装目标
+
+```gitignore
+# 项目级 skill 安装目标（由 install-skill --scope project 写入）。
+# 想随项目提交 skill（让协作者自动获得）时，删掉这几行即可。
+/.dsh/skills/
+/.agents/skills/
+/.claude/skills/
+```
+
+默认忽略，避免一次安装就把仓库弄脏；删掉即可选择"随项目提交"。
+
+### 38.6 提交
+
+```
+826f2ea  feat(install-skill): target agents and scope explicitly, and fix silent uninstall
+```

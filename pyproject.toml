@@ -25,6 +25,9 @@ dependencies = [
   "playwright>=1.49,<1.61",
   "python-dotenv>=1.0.0",
   "mcp>=1.2",
+  # `elang setup-mcp` parses agent configs, edits structurally, then re-parses to
+  # verify and rolls back on failure. An appender cannot verify.
+  "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -69,6 +72,7 @@ packages = ["src/elang"]
 # repo layout for development.
 "SKILL.md" = "elang/share/SKILL.md"
 "README.md" = "elang/share/README.md"
+"SETUP.md" = "elang/share/SETUP.md"
 ".env.example" = "elang/share/.env.example"
 "CLAUDE.md" = "elang/share/CLAUDE.md"
 "MIGRATION_CHECKPOINT.md" = "elang/share/MIGRATION_CHECKPOINT.md"
