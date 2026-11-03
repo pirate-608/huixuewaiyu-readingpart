@@ -195,6 +195,28 @@ elang skip / continue / stop
 `--limit N` 与 checkpoint 有一个重要交互：**只处理了部分文章时不会把该主题
 标记为完成**，否则下次全量运行会跳过剩余文章。
 
+## 提交前必做：隐私守卫
+
+仓库是**公开**的。第一次克隆后启用提交钩子（一次即可）：
+
+```bash
+git config core.hooksPath .githooks
+```
+
+它会在每次提交前跑 `scripts/test_no_secrets.py`，命中即**阻断提交**。
+
+手动跑：
+
+```bash
+.venv/Scripts/python.exe scripts/test_no_secrets.py
+```
+
+它会扫描**受跟踪文件**里的：API key / 私钥 / 字面量密码赋值 /
+学号样式数字（10 位、3 开头）/ 本机用户路径，并断言 `.env` 未跟踪且被忽略。
+
+> **踩过的坑**：清理隐私时写的说明文档里**引用了学号原文**，提交后反而把数据
+> 带回了历史，导致不得不重写两次。**描述，不要引用原值。**
+
 ## 容易踩的坑
 
 - **`job_output(wait=true)` 会挂住**，而脚本可能正等着你 —— 用非阻塞读取

@@ -311,6 +311,12 @@ cd huixuewaiyu-readingpart
 python scripts/setup.py          # 装工具 + 注册 skill + 报告状态
 ```
 
+首次克隆后建议启用提交钩子（仓库公开，防止误提交隐私）：
+
+```bash
+git config core.hooksPath .githooks
+```
+
 仓库也可以**脱离工具独立运行**：
 
 ```bash
