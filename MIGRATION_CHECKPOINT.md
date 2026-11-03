@@ -3376,3 +3376,79 @@ SKILL.md 269 行
 ```
 cef19eb  docs: split the documentation by audience — 执行 agent vs 开发 agent
 ```
+
+---
+
+## 44. 凭据变量名：两套都兼容，但文档写混了
+
+用户发现 `.env` 里是 `CAS_PASSWORD`（无前缀），而文档里提到 `ELANG_CAS_*`，
+问是不是"已经兼容新的，还是仍在混用"。
+
+### 44.1 结论：代码没混用，文档混了
+
+**代码（`config.py`）从一开始就是两套都认的**：
+
+```python
+USER_KEYS = ("ELANG_CAS_USERNAME", "CAS_USERNAME")   # 带前缀优先
+PASS_KEYS = ("ELANG_CAS_PASSWORD", "CAS_PASSWORD")
+```
+
+实测（逐项验证）：
+
+| 场景 | 结果 |
+|---|---|
+| 文件写 `CAS_USERNAME` | ✅ `from file:CAS_USERNAME` |
+| 文件写 `ELANG_CAS_USERNAME` | ✅ `from file:ELANG_CAS_USERNAME` |
+| 两者都在文件 | ✅ 带前缀优先 |
+| 环境变量（两种写法） | ✅ 都认 |
+| 两者都在环境 | ✅ 带前缀优先 |
+| 环境变量 vs 文件 | ✅ 环境变量胜出 |
+
+**问题在呈现**：
+
+- 模板（`write_env_template`、`.env.example`、`init_env` 输出、README 示例）
+  写的是**裸名**
+- 所有"解析顺序"块只列**带前缀名**作为环境变量覆盖
+- 两者并排看像两个不相关的变量 → 看起来像混用
+
+### 44.2 为什么本来就该有两套
+
+- **`.env` 用裸名**：简短，且兼容本项目早期（前缀出现之前）已有的配置
+- **环境变量用带前缀名**：进程环境是共享的，裸 `CAS_USERNAME` 可能与其他工具撞车
+
+**两个来源都接受两种写法**，同源内带前缀优先。
+
+### 44.3 修正（只改呈现，不改行为）
+
+- `SKILL.md` / `SETUP.md` / `README.md` / `CLAUDE.md`：统一成**一份**解析块，
+  同时列出文件顺序、两套键名与优先级
+- `README.md` 补「为什么有两套」的说明
+- `write_env_template` 与 `.env.example` 写同样的说明 —— 新生成的 `.env` 自带解释
+- `init_env` 输出提示也接受带前缀写法
+
+### 44.4 ✅ 用测试锁住
+
+新增 `scripts/test_env_names.py`（**19 项**）：文件两套、环境两套、同源内带前缀优先、
+环境压过文件、部分配置如实报告、生成的模板同时提到两套名、**每份文档都必须同时提到两套**。
+
+以后谁把文档改成只写一套，测试直接失败。
+
+### 44.5 ✅ 验证
+
+真实工作区 `.env`（裸名）仍正常：
+
+```
+env file : ...\huixuewaiyu-readingpart\.env  (workspace)
+username : set  from file:CAS_USERNAME
+password : set  from file:CAS_PASSWORD
+All good.
+```
+
+全量回归：env_names 19/19、doc_roles 33/33、answer_ipc 20/20、answer_bank 全过、
+setup_mcp 33/33、MCP 往返通过。
+
+### 44.6 提交
+
+```
+a10b0b0  docs(credentials): state both accepted spellings everywhere they are described
+```
