@@ -61,9 +61,10 @@ def write_request(ipc, status="waiting_for_ai", questions=None):
         json.dumps(d, ensure_ascii=False), encoding="utf-8")
 
 
-ipc = Path(tempfile.mkdtemp(prefix="elangtest-", dir=str(REPO / "temp")))
+scratch = REPO / "temp"
+scratch.mkdir(parents=True, exist_ok=True)     # absent in a fresh clone
+ipc = Path(tempfile.mkdtemp(prefix="elangtest-", dir=str(scratch)))
 try:
-    (REPO / "temp").mkdir(exist_ok=True)
     print(f"ipc sandbox: {ipc}")
 
     print("\n=== pending ===")

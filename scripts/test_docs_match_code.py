@@ -145,8 +145,10 @@ print("\n=== archive/ stays out of the repository ===")
 tracked = subprocess.run(["git", "ls-files", "archive"], cwd=str(REPO),
                          capture_output=True, text=True).stdout.strip()
 check("archive is not tracked", not tracked, tracked[:60])
-ignored = subprocess.run(["git", "check-ignore", "archive"], cwd=str(REPO),
-                         capture_output=True, text=True)
+# A bare "archive" does not exist in a fresh clone, and git check-ignore cannot
+# classify it as a directory, so probe a path inside the ignored directory.
+ignored = subprocess.run(["git", "check-ignore", "archive/README.md"],
+                         cwd=str(REPO), capture_output=True, text=True)
 check("archive is gitignored", ignored.returncode == 0)
 check("no current document links into archive",
       "](archive/" not in read("README.md"))

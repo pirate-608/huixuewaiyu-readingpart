@@ -53,7 +53,9 @@ def resolve(env_text):
     return config.load_credentials()
 
 
-tmp = Path(tempfile.mkdtemp(prefix="elangenv-", dir=str(REPO / "temp")))
+scratch = REPO / "temp"
+scratch.mkdir(parents=True, exist_ok=True)     # absent in a fresh clone
+tmp = Path(tempfile.mkdtemp(prefix="elangenv-", dir=str(scratch)))
 path = tmp / ".env"
 os.environ["ELANG_ENV_FILE"] = str(path)
 try:
