@@ -6,7 +6,7 @@
 
 This file provides guidance to coding agents working in this repository.
 
-> ## ⚠️ 三条必须记住的规则
+> ## ⚠️ 四条必须记住的规则
 >
 > **1. 不要阻塞等待。** MCP 模式下没有任何 tool 会等待，每步立即返回状态
 > 与可执行的下一步。用"挂着等输出"的方式轮询会让双方互相等待。
@@ -17,6 +17,22 @@ This file provides guidance to coding agents working in this repository.
 > **3. 不要依赖系统 Python 的 site-packages。** 不用 `--system-site-packages`，
 > 不往系统解释器装包。每台机器全局环境不同，借来的依赖换机即失效。
 > `doctor.py` 会检测并警告这种情况。
+>
+> **4. 网络失败先判断代理状态，不要重复重试。** 本项目涉及两类网络目的地，
+> 它们对代理的要求相反：
+>
+> | 目的地 | 正常访问方式 | 失败时的典型原因 |
+> |---|---|---|
+> | GitHub、uv、浏览器下载源 | 经由代理 | 代理未开启，或分流规则把流量绕过了 |
+> | 慧学外语（`elang.zju.edu.cn`、`zjuam.zju.edu.cn`） | 直连 | 代理或 TUN 模式仍处于开启状态 |
+>
+> - `git clone`、`uv tool install`、`elang install-browser` 失败时，先确认代理由
+>   是否开启。代理关闭时这些操作容易失败，这不是仓库或工具的问题。
+> - 访问慧学外语失败、登录页打不开时，先确认 TUN 模式与系统全局代理已关闭。
+>   站点对访问来源有网络限制，重试不会改变结果。
+> - 两类失败都不要连续重试。先判断网络状态，再决定下一步。
+>
+> 这条规则不针对某台机器，任何参与本项目开发的人都适用。
 >
 > 改动代码前请读 [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md)：
 > 那里有实测事实、被推翻的假设和踩过的坑。

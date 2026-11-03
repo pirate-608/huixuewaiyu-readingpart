@@ -338,6 +338,9 @@ zjuam.zju.edu.cn
 
 没有分流规则时，按顺序操作：开启代理完成安装，关闭代理后再运行。
 
+反过来说，关闭代理后 `git clone`、`uv tool install`、`elang install-browser`
+会失败。这类失败源于网络，不要反复重试；先确认代理状态再继续。
+
 ### 如何判断是网络问题还是工具问题
 
 先在不使用代理的浏览器中打开 `https://elang.zju.edu.cn` 并尝试登录：
