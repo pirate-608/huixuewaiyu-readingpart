@@ -49,10 +49,16 @@
 | `review.py` | 写 `elang_signal.json` 提交答案 |
 | `test_session.py` | 验证上述协议的校验与 echo |
 
-**过时原因**：该协议用两个进程互相轮询（脚本写文件等答案，答题方轮询文件），
-双方都会阻塞 —— 这是本项目最大的时间浪费来源。
+**过时原因**：它只是一个**临时脚本**，不是接口 —— 没有安装机制、没有文档、
+没有测试，所以 `elang run` 的答题侧一度完全丢失（脚本在等，却没人能答）。
+
+**注意：协议本身没有被废弃。** 文件 IPC 已于 §41 恢复为**一等命令**
+（`elang pending` / `elang answer` / `elang skip` / `elang continue` /
+`elang stop`），这样 `elang run` 才能作为 MCP 不可用时的回退。
+被归档的是那个临时脚本，以及"双方互相轮询"的**用法**：
+现在只有 `elang run` 在自己的后台 job 里阻塞，agent 侧全部立即返回。
 MCP 化后由 `elang_session.py` 的状态机取代：每个 tool 立即返回，
-**不存在等待**。文件 IPC 不再有调用方。
+**这条结论已于后续推翻** —— 见上面的说明与 `MIGRATION_CHECKPOINT.md` §41。
 
 ---
 

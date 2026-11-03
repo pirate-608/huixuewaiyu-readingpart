@@ -26,36 +26,48 @@ Playwright 自动化，驱动慧学外语 (elang.zju.edu.cn) 的 **PC 版界面*
 
 | 文件 | 职责 |
 |---|---|
-| `scripts/elang_reader.py` | 批处理驱动：浏览器、抓取、作答、提交（CLI） |
+| `scripts/elang_reader.py` | **引擎**：浏览器、抓取、作答、提交 + CLI 批处理流程 |
 | `scripts/elang_session.py` | **显式状态机**（MCP Level 1）—— 每个方法立即返回，绝不阻塞 |
 | `scripts/elang_mcp.py` | MCP server（10 个 tool），薄包装状态机 |
-| `scripts/config.py` | 凭据解析（**全项目唯一实现**） |
+| `scripts/answer_ipc.py` | **CLI 回退的答题侧**：`elang pending/answer/skip/continue/stop` |
+| `scripts/config.py` | 凭据与 IPC 路径解析（**全项目唯一实现**） |
 
-支持脚本：`setup.py`（安装）、`doctor.py`（诊断）、`init_env.py`（凭据模板）、
-`install_skill.py`（注册到各 agent 根目录）、`setup_mcp.py`（生成 MCP 注册）。
+支持脚本：`doctor.py`（诊断）、`init_env.py`（凭据模板）、`install_browser.py`、
+`install_skill.py`（注册到各 agent 根目录）、`setup_mcp.py`（MCP 注册）、
+`setup.py`（克隆仓库后的开发用一键安装）。
+
+**依赖方向**（不要制造环）：
+
+```
+elang_reader  ←  elang_session  ←  elang_mcp
+elang_reader  ←  answer_ipc      （只 import config，不 import reader）
+cli  →  {elang_reader(run), elang_mcp(mcp), answer_ipc(pending/answer/...), SIMPLE}
+```
 
 本仓库同时是 skill，按 `SKILL.md` 的契约被 DSH / Codex / Claude Code 发现。
 
 ## Commands
 
+**已安装的工具**（用户视角，文档里应优先用这个）：
+
 ```bash
-# 安装（建隔离 venv + 注册 skill + 报告状态）
-python scripts/setup.py
-python scripts/setup.py --check         # 只报告
+elang doctor                            # 依赖 / 浏览器 / 凭据，并给出修复命令
+elang init-env                          # 在工作区根生成 .env 模板
+elang install-browser                   # 装 Chromium（已有可用构建则跳过）
+elang setup-mcp --host claude|dsh|codex # 注册 MCP（备份+校验+回滚）
+elang install-skill --agent claude --scope global|project
+elang run batch-all                     # 驱动求解
+elang mcp                               # MCP server（stdio）
+elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
+```
 
-# 诊断：依赖 / 浏览器 / 凭据，并给出修复命令
-python scripts/doctor.py
+**仓库内开发**（源码布局，等价入口）：
 
-# 凭据
-python scripts/init_env.py              # 在工作区根生成 .env 模板
-python scripts/setup_mcp.py             # 生成 .mcp.json
-
-# 驱动
-python scripts/elang_reader.py batch-all
-python scripts/elang_reader.py batch 26
-python scripts/elang_reader.py solve "<praxis-url>"
-python scripts/elang_reader.py batch-all --subjects-only   # 只列主题，零风险
-python scripts/elang_reader.py batch-all --limit 1 --dry-run
+```bash
+.venv/Scripts/python.exe scripts/doctor.py
+.venv/Scripts/python.exe scripts/elang_reader.py batch-all --subjects-only
+.venv/Scripts/python.exe scripts/elang_reader.py batch-all --limit 1 --dry-run
+.venv/Scripts/python.exe scripts/answer_ipc.py pending --brief
 ```
 
 `--dry-run` 会打开提交确认框但**不提交**。

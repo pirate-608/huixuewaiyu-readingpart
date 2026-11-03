@@ -50,7 +50,7 @@ uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 elang list
 ```
 
-应列出：`doctor` `init-env` `install-browser` `setup-mcp` `install-skill` `run` `mcp`
+应列出：`doctor` `init-env` `install-browser` `setup-mcp` `install-skill` `run` `mcp`，以及答题侧动词 `pending` `answer` `skip` `continue` `stop`
 
 **若 `uv` 不存在**：告诉用户，**不要擅自安装 uv**（那是系统级决定）。
 替代方案：`git clone` 后 `python scripts/setup.py`。

@@ -72,21 +72,24 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 #     (packaged via pyproject force-include)
 #   * repo checkout  -> `<repo>/<key>`
 #
-# The `scripts/` fallback exists only for a repo checkout, so a user who cloned
-# the repo is never left without a runnable path; the contract still presents
-# `elang <cmd>` as the primary interface.
+# The skill carries no implementation: the contract presents `elang <cmd>` as the
+# only interface. A repo checkout can still run `python scripts/...` directly for
+# development, but that is a developer path, not part of what gets installed.
+# Documentation and contract ONLY. The mechanism lives in the installed tool
+# (`elang`), so copying `scripts/` here would create a second copy of the code that
+# drifts from the real one — and it cannot even be satisfied from a `uv tool
+# install`, which has no repo layout, so every install printed "missing: scripts".
+# SKILL.md now states plainly that the interface is `elang ...`, not
+# `python scripts/...`.
 PAYLOAD = [
     ("SKILL.md", "SKILL.md"),                              # the contract itself
     ("README.md", "README.md"),                            # user-facing overview
     ("SETUP.md", "SETUP.md"),                              # agent install guide
-    ("references/answers.json", "references/answers.json"),  # answer bank
-    ("references/parse_answers.py", "references/parse_answers.py"),
     (".env.example", ".env.example"),                      # credential template
     ("CLAUDE.md", "CLAUDE.md"),                            # agent-facing guidance
     ("MIGRATION_CHECKPOINT.md", "MIGRATION_CHECKPOINT.md"),
     ("MCP_DESIGN.md", "MCP_DESIGN.md"),
     ("DISTRIBUTION.md", "DISTRIBUTION.md"),
-    ("scripts", "scripts"),                                # repo-only fallback
 ]
 
 # Files packaged under `elang/share/` (see pyproject force-include).

@@ -56,15 +56,32 @@ DSH 的 `skill-filesystem` provider 定义（源码实测）：
 
 ### 通道 A：单一入口，覆盖三平台
 
-新增 `scripts/install_skill.py`，一个脚本装所有平台：
+`install_skill.py`，一个命令装所有平台。**用户侧入口是 `elang install-skill`**：
 
 ```bash
-python scripts/install_skill.py --check      # 只报告
-python scripts/install_skill.py --copy       # 复制（默认推荐，干净）
-python scripts/install_skill.py --link       # 目录连接（开发用，改源码即生效）
-python scripts/install_skill.py --hosts dsh,codex,claude
-python scripts/install_skill.py --uninstall
+elang install-skill --agent claude                # 只装 Claude Code
+elang install-skill --agent dsh,codex --scope project
+elang install-skill --scope all                   # 全局 + 项目
+elang install-skill --check                       # 只报告
+elang install-skill --uninstall --agent claude
 ```
+
+| 选项 | 取值 |
+|---|---|
+| `--agent`（`--hosts` 为别名） | `dsh` / `codex` / `claude`，逗号分隔；默认自动探测 |
+| `--scope` | `global`（默认）/ `project` / `all` |
+| `--project-root` | 覆盖自动探测的项目根 |
+| `--dir` | 直接指定单个 skills 根 |
+
+**`--copy` 是默认**（`--link` 需显式指定）：link 只在仓库检出时有意义，
+装成 tool 后没有仓库，默认 link 会让分发场景直接失败。
+
+**DSH 与 Codex 共享 `~/.agents/skills`** —— 给两者安装只写一个目录，
+输出里合并显示为 `codex+dsh`。
+
+**项目级安装**写在项目内，**优先级高于全局**（DSH 项目根 rank 100/200，
+全局 400/500），并可随项目提交给协作者。默认被 `.gitignore` 忽略，
+删掉那几行即可选择提交。
 
 **复制模式只带 payload**：`SKILL.md`、`scripts/`、`references/`、`assets/`、
 `requirements.txt`、`CLAUDE.md`、`MIGRATION_CHECKPOINT.md`、`MCP_DESIGN.md`。
@@ -85,7 +102,7 @@ python scripts/install_skill.py --uninstall
 ⚠️ **前置条件（实测）**：server 必须在**文件沙箱之外**运行。
 Playwright 与 MCP stdio 客户端都经 `asyncio` 在 Windows 创建**命名**管道，
 沙箱拒绝 `CreateFile("\\.\pipe\...")` → WinError 5。
-→ 需要为 `elang-mcp` **配一次 full access**，而非每次批准。
+→ 需要为注册的 server（名为 `elang`，工具显示为 `mcp__elang__*`）**配一次 full access**，而非每次批准。
 
 ### 通道 C：DSH npm 插件（待做）
 

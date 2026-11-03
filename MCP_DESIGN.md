@@ -1,5 +1,18 @@
 # MCP 设计计划
 
+> ## ⚠️ 本文是**设计记录**，不是现状说明
+>
+> 文中"目标态"与"待做"是写作当时的计划。落地情况已变化，读代码/`SKILL.md`
+> 为准。与本文不一致的**关键点**：
+>
+> | 本文当时写的 | 现在的实际 |
+> |---|---|
+> | "MCP 成为唯一接口，文件 IPC 退休" | **文件 IPC 没有退休**。它是 `elang run` 回退路径的答题通道，已实现为一等命令 `elang pending/answer/skip/continue/stop`（§41） |
+> | `review.py` 降级为回退 | `review.py` 已归档；其能力由 `elang answer` 等命令取代 |
+> | `AI_TIMEOUT` 应消失 | CLI 路径**仍有** `AI_TIMEOUT=600`（回退路径需要一个上限）；MCP 路径确实没有超时概念 |
+> | "双向阻塞"是旧架构的缺陷 | 缺陷在**用法**：现在只有 `elang run` 阻塞在自己的后台 job 里，agent 侧全部立即返回 |
+
+
 Status: **计划中**，尚未实施。
 依据：`MIGRATION_CHECKPOINT.md` 的实测事实 + 当前 `scripts/` 的真实函数表。
 
