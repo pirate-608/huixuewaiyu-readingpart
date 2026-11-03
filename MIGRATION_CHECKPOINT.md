@@ -3452,3 +3452,104 @@ setup_mcp 33/33、MCP 往返通过。
 ```
 a10b0b0  docs(credentials): state both accepted spellings everywhere they are described
 ```
+
+---
+
+## 45. 🔴 隐私审计与历史重写（学号误提交进公开仓库）
+
+用户要求两件事：检查提交内容是否含本地敏感信息；确保除 `.env` 外工具不落明文
+CAS 隐私数据。
+
+### 45.1 仓库审计结果
+
+| 检查项 | 结果 |
+|---|---|
+| API key / 私钥 / token | ✅ 无 |
+| `.env` 是否曾提交 | ✅ 从未（`.env.example` 只是模板） |
+| **真实学号** | 🔴 **2 处**（`MIGRATION_CHECKPOINT.md`） |
+| **含用户名的本机路径** | 🔴 **5 处**（`C:\Users\<user>\…`） |
+| **本地仓库路径** | 🔴 **3 处**（开发者的本地检出目录） |
+
+**性质**：那是一枚**真实学号**（形如 `3*********`），出现在公开仓库里（当时 `"private": false`，
+9 star、1 fork）。密码从未出现在仓库。
+
+### 45.2 工具侧明文存储核查
+
+| 数据 | 存哪 | 结论 |
+|---|---|---|
+| **CAS 密码** | **仅 `.env`** | ✅ 唯一一处，且 `.env` 从未跟踪 |
+| 密码进日志 | 从不 | ✅ |
+| **学号进日志** | 原来**会**：`CAS auto-login as <id>`、`session saved (sid=<id>)` | 🔴 已掩码 |
+| 会话（`user` + JWT + cookies，**无密码**） | 原在 `C:/tmp`（本机其他用户可读） | 已移至 `~/.elang/session.json` + POSIX `chmod 600` |
+| 浏览器 profile（cookies） | `~/.elang/browser-profile` | Chromium 自身存储，无法避免 |
+| 验证码图 / 题面 / 截图 | IPC 目录 | 只有题面，无凭据 |
+
+**结论：密码确实只在 `.env`；但学号曾被写进 stdout，这是真 bug，已修。**
+
+### 45.3 修复 1：当前树脱敏
+
+- 学号 → 占位符
+- `C:\Users\<user>\…` → `%USERPROFILE%` / `%APPDATA%` / `%LOCALAPPDATA%`
+- 开发者的本地检出目录 → `<repo>`
+- 归档脚本里的 `C:\Python3xx` **候选列表保留**（标准安装位置，非本机布局）
+
+### 45.4 修复 2：运行时不落隐私
+
+- `_mask_id()`：学号在日志里显示为 `325*******`
+- 会话文件移出共享临时目录，写入后收紧权限（POSIX）
+- `.env` 写入后同样收紧权限
+- 新增 `scripts/test_no_secrets.py`（8 项）：扫描密钥、字面量密码赋值、
+  学号样式数字、本机用户路径；断言 `.env` 未跟踪且被忽略
+
+### 45.5 修复 3：历史重写（force push）
+
+**为什么只能 force push**：git 提交哈希由内容决定，学号只要还在任何一次提交里
+就能被 `git log -p` 翻出。要真正移除，必须改变提交内容 → 哈希变化 → 非快进推送。
+
+排除的方案：
+
+- 只改当前树 → 旧提交仍可检索 ❌
+- 改仓库为私有 → 但本项目靠公开仓库分发（README 的一句话提示词依赖它）❌
+- 请 GitHub 清除 → 只能清缓存，改不了提交内容 ❌
+
+**执行**：`git filter-repo --replace-text`，替换 4 组字符串：
+
+```
+<真实学号：10 位数字>                  -> <sid>
+Users/<user>  /  Users\<user>             -> Users/<user>
+<开发者本地检出目录>                  -> <repo>
+```
+
+**验证**（重要，证明只改了字符串、没改内容）：
+
+| 检查 | 结果 |
+|---|---|
+| 提交数 | 37 → 37（不变） |
+| **提交信息序列** | 完全一致 |
+| **HEAD 树对象** | 一致 → 当前内容零变化 |
+| 旧历史含学号提交 | 4 → **0** |
+| 旧历史含用户名路径 | 2 → **0** |
+| 全新 clone 复查远端 | **0 命中** |
+
+**残留风险（已写入 `SECURITY.md`）**：
+
+- **fork 保留重写前副本**，上游无法删除
+- 旧克隆需 `git fetch --all && git reset --hard origin/master` 或重新 clone
+- GitHub 可能短期缓存旧对象
+
+**为了不让重写显得粗暴**，专门新增 `SECURITY.md` 说明：发生了什么、为什么必须
+force push、排除了哪些替代方案、影响范围（只涉及学号与路径，代码零变化）、
+以及旧克隆怎么同步。
+
+### 45.6 本地清理
+
+重写后删除历史备份 bundle 与替换规则文件，并 `reflog expire + gc --prune=now`
+清掉旧对象 —— 本地也不留副本。
+
+### 45.7 提交
+
+```
+5e9835f  (重写后的 HEAD) docs(security): explain the history rewrite and the privacy rules it produced
+```
+
+> 重写改变了所有提交哈希，上文只保留语义信息，不引用旧 SHA。

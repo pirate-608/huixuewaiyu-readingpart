@@ -1,0 +1,43 @@
+#!/bin/sh
+# Block a commit that would introduce secrets or local-machine paths.
+#
+# This repository is public, and a real student id plus user-account paths were
+# once committed by accident — including once *in the documentation about* that
+# accident. A guard that only runs when someone remembers is not a guard.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# Bypass deliberately (rare):  git commit --no-verify
+#
+# The check scans TRACKED files, so it inspects exactly what is about to be shared.
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root" || exit 0
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+    py=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+    py=".venv/bin/python"
+elif command -v python >/dev/null 2>&1; then
+    py="python"
+elif command -v python3 >/dev/null 2>&1; then
+    py="python3"
+else
+    echo "[pre-commit] no python found; skipping the privacy guard" >&2
+    exit 0
+fi
+
+if ! "$py" scripts/test_no_secrets.py >/tmp/elang-privacy-guard.log 2>&1; then
+    echo "" >&2
+    echo "==============================================================" >&2
+    echo " COMMIT BLOCKED — the privacy / secret guard failed" >&2
+    echo "==============================================================" >&2
+    "$py" scripts/test_no_secrets.py 2>&1 | grep -E "FAIL|^      " | head -20 >&2
+    echo "" >&2
+    echo " See the list above. Replace the value with a placeholder." >&2
+    echo " Full log: /tmp/elang-privacy-guard.log" >&2
+    echo " Deliberate bypass: git commit --no-verify" >&2
+    exit 1
+fi
+exit 0
