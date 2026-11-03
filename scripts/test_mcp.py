@@ -23,6 +23,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 
+def _is_error(res):
+    """Read the error flag across MCP SDK versions.
+
+    1.x exposes `isError`; 2.x renamed it `is_error`. The production server has the
+    same shim, so the test must not pin one spelling.
+    """
+    for attr in ("is_error", "isError"):
+        if hasattr(res, attr):
+            return getattr(res, attr)
+    return None
+
+
 async def main():
     do_browser = "--browser" in sys.argv
     try:
@@ -65,7 +77,7 @@ async def main():
             print("\n[test] calling elang_status (no browser yet)...")
             res = await session.call_tool("elang_status", {})
             text = "".join(c.text for c in res.content if hasattr(c, "text"))
-            print(f"  isError={res.isError}")
+            print(f"  isError={_is_error(res)}")
             print(f"  {text[:300]}")
 
             if do_browser:
@@ -74,7 +86,7 @@ async def main():
                                               {"dry_run": True, "limit": 1})
                 text = "".join(c.text for c in res.content
                                if hasattr(c, "text"))
-                print(f"  isError={res.isError}")
+                print(f"  isError={_is_error(res)}")
                 try:
                     env = json.loads(text)
                     print(f"  state={env.get('state')} "
@@ -87,7 +99,7 @@ async def main():
                 res = await session.call_tool("elang_stop", {})
                 text = "".join(c.text for c in res.content
                                if hasattr(c, "text"))
-                print(f"  isError={res.isError} {text[:200]}")
+                print(f"  isError={_is_error(res)} {text[:200]}")
 
     print("\n[test] protocol round-trip complete")
     return 0

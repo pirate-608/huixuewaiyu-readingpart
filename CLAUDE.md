@@ -135,8 +135,26 @@ python scripts/elang_reader.py batch-all --limit 1 --dry-run
 `elang_captcha_image.png`）、**会话**（`elang_session.json`）、
 **断点**（`elang_checkpoint.json`）。
 
-**答案不再走文件。** 旧的 `elang_current.json` / `elang_signal.json` 协议
-已归档到 `archive/legacy-ipc/` —— 它让两个进程互相轮询、双方都阻塞。
+**答案走文件，但只在 CLI 回退路径上。** `elang run` 遇到题库没覆盖的文章时，
+把题目写到 `elang_current.json` 并等待；**答题方是 agent**，用这些命令作答：
+
+```
+elang pending              # 显示待答文章（立即返回）
+elang pending --brief      # 一行摘要
+elang answer 0=A 1=C       # 选择题给选项字母
+elang answer "5=A,B,C"     # 填空题每空一个值，逗号分隔
+elang answer --raw '[[0,1],[1,2]]'
+elang skip / continue / stop
+```
+
+`answer_ipc.py` **只依赖 config**，不 import `elang_reader`，所以不需要 Playwright。
+
+> **关键：只有 `elang run` 自己在后台阻塞，agent 侧永远不阻塞。**
+> 旧的痛点是双方互相等 —— 那是用法错误（拿"挂着等输出"去 poll），不是协议的问题。
+> 正确姿势：`elang run` 作为后台 job 启动，agent 用 `elang pending --brief`
+> 轮询（立即返回），需要作答时再 `elang answer`。
+>
+> MCP 路径不需要这套东西 —— 它本身就是非阻塞状态机。
 
 ### CAPTCHA
 

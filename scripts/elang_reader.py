@@ -77,18 +77,20 @@ def _get_ocr():
     return _ocr
 
 # ---- Platform-aware IPC paths ----
-# On Windows, Python resolves "/tmp/" to "C:\tmp\". On Linux it stays "/tmp/".
-# We make this explicit so paths are clear regardless of platform.
-# ELANG_TMP_DIR overrides the location (useful for sandboxed/test runs that
-# cannot write to C:\tmp, and for keeping artifacts inside a project dir).
-import platform as _platform
-_ipc_override = os.getenv("ELANG_TMP_DIR", "").strip()
-if _ipc_override:
-    _IPC_ROOT = Path(_ipc_override)
-elif _platform.system() == "Windows":
-    _IPC_ROOT = Path("C:/tmp")
-else:
-    _IPC_ROOT = Path("/tmp")
+# The rule lives in config.ipc_dir() so the answering commands can use exactly the
+# same paths WITHOUT importing this module (which pulls in Playwright).
+#   ELANG_TMP_DIR overrides; otherwise C:/tmp on Windows, /tmp elsewhere.
+try:
+    import config as _config_ipc
+    _IPC_ROOT = _config_ipc.ipc_dir()
+except Exception:                                   # config unavailable: inline
+    import platform as _platform
+    _ipc_override = os.getenv("ELANG_TMP_DIR", "").strip()
+    if _ipc_override:
+        _IPC_ROOT = Path(_ipc_override)
+    else:
+        _IPC_ROOT = (Path("C:/tmp") if _platform.system() == "Windows"
+                     else Path("/tmp"))
 
 SCRATCH_DIR = str(_IPC_ROOT / "elang_screenshots")
 CURRENT_FILE = str(_IPC_ROOT / "elang_current.json")
@@ -1278,12 +1280,23 @@ async def wait_for_ai(timeout=AI_TIMEOUT):
 
 
 async def request_ai_answers(article_data):
-    """Write current article to CURRENT_FILE for AI to read."""
+    """Write current article to CURRENT_FILE for an external answerer to read.
+
+    This is the LAST resort in the decision chain (bank -> model -> this). It is
+    kept for compatibility with an external answering process, but a standalone
+    run has none, so the message says how to stop needing it rather than leaving
+    the user staring at a silent ten-minute wait.
+    """
     with open(CURRENT_FILE, "w", encoding="utf-8") as f:
         json.dump(article_data, f, ensure_ascii=False, indent=2)
     if os.path.exists(SIGNAL_FILE):
         os.remove(SIGNAL_FILE)
-    print(f"[elang] Waiting for AI answers... (timeout={AI_TIMEOUT}s)")
+    print("  [ANSWER NEEDED] the bank did not cover this article.")
+    print(f"    request written to: {CURRENT_FILE}")
+    print(f"    the answering side should read it, then write {SIGNAL_FILE}:")
+    print('      {"status":"answers_ready","answers":[[qIdx,value],...]}')
+    print("    with this tool that is:  elang pending   /   elang answer ...")
+    print(f"    timeout: {AI_TIMEOUT}s")
     return await wait_for_ai()
 
 
@@ -1960,6 +1973,9 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
                 "answers": [],
                 "status": "waiting_for_ai",
             }
+            # Decision sources: the answer bank (already tried above), else the
+            # answering side reads CURRENT_FILE and writes SIGNAL_FILE. With this
+            # tool that side is the agent, via `elang pending` / `elang answer`.
             data = await request_ai_answers(article_data)
 
         if data and data.get("status") in ("answers_ready", "skip"):

@@ -111,17 +111,47 @@ elang_stop
 提交后返回值含 `echo` 与 `incomplete` —— **务必检查 `incomplete`**，
 它列出没有回读为已答的题。
 
-### 方式 B：CLI
+### 方式 B：CLI（回退路径，你负责答题）
 
 ```bash
-$PY scripts/elang_reader.py batch-all                        # 全部主题（220 篇）
-$PY scripts/elang_reader.py batch 26                         # 单个主题
-$PY scripts/elang_reader.py batch-all --subjects-only        # 只列主题，零风险
-$PY scripts/elang_reader.py batch-all --limit 1 --dry-run    # 安全试跑
+elang run batch-all                        # 全部主题（220 篇）
+elang run batch 26                         # 单个主题
+elang run batch-all --subjects-only        # 只列主题，零风险
+elang run batch-all --limit 1 --dry-run    # 安全试跑
 ```
 
 **首次务必先 `--subjects-only` 或 `--limit 1 --dry-run`**，
 确认路径与登录都正常，再放开全量。
+
+#### 你（agent）就是答题方
+
+题库覆盖的文章会自动完成，**剩下的需要你答**。`elang run` 会写下题目然后等待。
+
+**这一步最容易搞错**：`elang run` 在**它自己那个后台 job 里**阻塞等待是正常的；
+**你不要等它的输出**。正确循环：
+
+```
+1. 把 `elang run batch-all` 作为后台 job 启动
+2. 轮询（非阻塞，立即返回）：
+       elang pending --brief
+   看 `status=`：
+       waiting_for_ai  -> 有文章待答，进入第 3 步
+       checkpoint      -> 每 50 篇的断点，用 elang continue 或 elang stop
+       其他 / 文件不存在 -> 还在跑（或已结束），继续轮询
+3. 读题目： elang pending
+4. 作答：
+       elang answer 0=A 1=C              选择题给选项字母（题目下标从 0 开始）
+       elang answer "5=A,B,C"            填空题每空一个值，逗号分隔
+       elang answer --raw '[[0,1],[5,["A-x"]]]'
+   词库填空给字母即可，工具会映射成选项的 value
+5. 回到第 2 步，直到 job 结束
+```
+
+**绝不要**用"挂着等 job 输出"的方式轮询（`job_output(wait=true)`）——
+那会让双方互相等待，这正是旧设计的痛点。
+
+**答错或不答的后果**：不答会让 `elang run` 等到 600s 超时，那篇标记 `timeout` 并跳过。
+拿不准就用 `elang skip`（原样提交，不计分但不阻塞）。
 
 ---
 

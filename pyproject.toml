@@ -57,6 +57,9 @@ packages = ["src/elang"]
 "scripts/install_browser.py" = "elang/install_browser.py"
 "scripts/install_skill.py" = "elang/install_skill.py"
 "scripts/setup_mcp.py" = "elang/setup_mcp.py"
+# The answering half of `elang run`: `elang pending` / `elang answer`. Without it
+# the CLI fallback has a browser side but no answering side.
+"scripts/answer_ipc.py" = "elang/answer_ipc.py"
 # Sourced from references/ on purpose: that stays the SINGLE authoritative copy,
 # so the packaged data cannot drift from the repo's. (Copying it into
 # src/elang/data/ made two tracked copies of the same file.)

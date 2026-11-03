@@ -157,6 +157,18 @@ elang run batch-all --limit 1 --dry-run          # 安全试跑
 
 **首次务必先 `--subjects-only` 或 `--limit 1 --dry-run`**，确认路径与登录正常再放开全量。
 
+`elang run` 遇到题库没覆盖的文章时会停下来等作答。**答题方是你（agent）**：
+
+```bash
+elang pending            # 看题目（立即返回；--brief 只看摘要）
+elang answer 0=A 1=C     # 选择题给字母；填空题每空一个值："5=A,B,C"
+elang skip               # 原样提交
+elang continue / stop    # 每 50 篇的断点
+```
+
+`elang run` 挂在自己那个后台 job 里等待，**你这边不要等它输出** ——
+用 `elang pending --brief` 轮询，它是非阻塞的。
+
 ### 其他命令
 
 | 命令 | 作用 |
@@ -165,7 +177,10 @@ elang run batch-all --limit 1 --dry-run          # 安全试跑
 | `elang init-env` | 生成 `.env` 模板 |
 | `elang install-browser` | 安装 Chromium |
 | `elang install-skill` | 注册 skill |
-| `elang setup-mcp` | 生成 `.mcp.json` |
+| `elang setup-mcp` | 注册 MCP（`--host claude|dsh|codex`） |
+| `elang pending` | 显示 `elang run` 正在等待的文章 |
+| `elang answer 0=A 1=C` | 作答（`elang run` 的答题侧） |
+| `elang skip` / `continue` / `stop` | 配合 `elang run` 的控制动词 |
 | `elang list` | 列出全部子命令 |
 
 ---

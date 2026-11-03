@@ -36,6 +36,10 @@ SIMPLE = {
     "install-skill": ("install_skill", "register the skill with agent roots"),
 }
 
+# The answering half of `elang run`. Verbs of their own so they read naturally in
+# the contract: `elang pending`, `elang answer 0=A`.
+IPC_VERBS = ("pending", "answer", "skip", "continue", "stop")
+
 
 def _run_module(modname, argv):
     """Import `modname` and call its main()."""
@@ -81,12 +85,28 @@ def main():
     if cmd == "mcp":
         return _run_module("elang_mcp", rest)
 
+    # The answering half of `elang run`: the agent reads the pending article and
+    # writes the answers. Only the solver blocks; these commands never do.
+    if cmd in IPC_VERBS:
+        try:
+            import answer_ipc
+        except Exception as e:
+            print(f"ERROR: cannot import answer_ipc: {type(e).__name__}: {e}",
+                  file=sys.stderr)
+            return 1
+        return answer_ipc.run(cmd, rest)
+
     if cmd == "list":
         print("subcommands:")
         for name, (_, desc) in SIMPLE.items():
             print(f"  {name:<15} {desc}")
         print(f"  {'run':<15} drive the solver (batch-all / batch / solve / ...)")
         print(f"  {'mcp':<15} run the MCP server on stdio")
+        print(f"  {'pending':<15} show the article `elang run` is waiting on")
+        print(f"  {'answer':<15} answer it, e.g. `elang answer 0=A 1=C`")
+        print(f"  {'skip':<15} submit the pending article as-is")
+        print(f"  {'continue':<15} resume after the checkpoint pause")
+        print(f"  {'stop':<15} stop the run")
         return 0
 
     print(f"unknown subcommand: {cmd}\n", file=sys.stderr)
