@@ -251,6 +251,23 @@ class ElangSession:
             self.content = content
             self.state = State.AWAITING_ANSWERS
             self.error = None
+
+            # Consult the answer bank so a known article skips the model entirely.
+            # The MCP path previously ignored it, which meant the bank only helped
+            # the CLI — an odd split, since MCP is the primary interface.
+            bank_note, bank_answers = self._bank_lookup(content, art)
+            extra = {}
+            if bank_answers:
+                extra["bank_answers"] = bank_answers
+                extra["hint"] = ("This article is in the answer bank: you may call "
+                                 "elang_submit_answers with bank_answers directly.")
+            else:
+                extra["hint"] = ("Answer every question, then call "
+                                 "submit_answers. Fill questions need one value "
+                                 "per blank.")
+            if bank_note:
+                extra["bank_note"] = bank_note
+
             return self.envelope(
                 article={
                     "index": art.get("index"),
@@ -260,12 +277,31 @@ class ElangSession:
                     "passage": content.get("passage"),
                     "questions": self._describe_questions(content["questions"]),
                 },
-                hint="Answer every question, then call submit_answers. "
-                     "Fill questions need one value per blank.",
+                **extra,
             )
 
         self.state = State.FINISHED
         return self.envelope(reason="no unfinished articles left")
+
+    def _bank_lookup(self, content, art):
+        """Return (note, answers) from the answer bank for this article.
+
+        `answers` is ready to pass to `submit_answers`; `note` explains a near
+        miss so the caller knows why the bank did not apply.
+        """
+        try:
+            title = content.get("title") or art.get("name")
+            ans, info = er._match_answer_bank(title)
+            if not ans:
+                ans, info = er._match_answer_bank(art.get("name"))
+            if not ans:
+                return None, None
+            answers, why = er._bank_answers_for(ans, content["questions"])
+            if answers is None:
+                return f"matched ({info}) but {why}", None
+            return f"matched ({info})", answers
+        except Exception as e:      # never let the bank break a run
+            return f"lookup failed: {type(e).__name__}: {e}", None
 
     @staticmethod
     def _describe_questions(questions):

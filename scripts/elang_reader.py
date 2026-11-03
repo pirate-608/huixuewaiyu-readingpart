@@ -212,6 +212,11 @@ def _load_answer_bank():
 
     A function, not import-time code, so importing this module as a library does
     no filesystem work and prints nothing.
+
+    The index maps a normalised title key to `{"answers": ..., "title": ...}`.
+    Keeping the ORIGINAL title is what makes word-level fuzzy matching possible —
+    the normalised key has every space stripped, so splitting it yields one giant
+    token and any overlap score is meaningless.
     """
     global _ANSWER_BANK
     if _ANSWER_BANK:
@@ -220,17 +225,34 @@ def _load_answer_bank():
         try:
             with open(_abp, "r", encoding="utf-8") as _f:
                 _bank = json.load(_f)
+            skipped_short = 0
             for _art in _bank.get("articles", []):
                 _ans = _art.get("answers")
                 if not _ans or _ans.get("format") == "unknown":
                     continue
                 _title = _art.get("title", "")
-                # Normalize title for matching
-                _key = re.sub(r'[^a-zA-Z0-9一-鿿]', '', _title.lower())
-                if _key and len(_key) >= 6:
-                    _ANSWER_BANK[_key] = _ans
+                _key = _normalize_title(_title)
+                if not _key:
+                    continue
+                if len(_key) < 6:
+                    skipped_short += 1
+                    continue
+                _ANSWER_BANK[_key] = {"answers": _ans, "title": _title}
+            # Report the format breakdown, not just a total. The old line said
+            # "84 entries" and implied they were all usable; in fact the format
+            # gate was rejecting 67 of them because the data says "letter" while
+            # the code tested "letters".
+            from collections import Counter as _Counter
+            kinds = _Counter(str(e["answers"].get("format") or "none").lower()
+                             for e in _ANSWER_BANK.values())
+            unsupported = sum(n for f, n in kinds.items()
+                              if f not in _BANK_FORMATS)
+            detail = ", ".join(f"{n} {f}" for f, n in sorted(kinds.items()))
             print(f"[elang] Answer bank loaded: {len(_ANSWER_BANK)} entries "
-                  f"from {_abp}")
+                  f"({detail}) from {_abp}"
+                  + (f"; {skipped_short} title(s) too short to match"
+                     if skipped_short else "")
+                  + (f"; {unsupported} with no usable format" if unsupported else ""))
             break
         except Exception as _e:
             print(f"[elang] WARNING: Failed to load answer bank {_abp}: {_e}")
@@ -238,14 +260,156 @@ def _load_answer_bank():
 
 
 def _normalize_title(title):
-    """Strip everything but letters/digits/CJK for title matching."""
+    """Strip everything but letters/digits/CJK — the exact-match index key."""
     return re.sub(r'[^a-zA-Z0-9一-鿿]', '', (title or "").lower())
+
+
+def _title_words(title):
+    """Lowercased word set, for fuzzy overlap.
+
+    Must be computed from the ORIGINAL title: the normalised key has no spaces,
+    so `.split()` on it always yields a single token.
+    """
+    return set(re.findall(r"[a-zA-Z0-9]+", (title or "").lower()))
+
+
+# Format names seen in answers.json. The data uses the SINGULAR "letter" for 67
+# entries while the old gate tested for the plural "letters", so every one of them
+# was silently rejected. Accept every spelling the data actually contains.
+_BANK_FORMATS = {
+    "letter", "letters", "letter_and_fill", "fill_in_blank", "fill",
+}
+
+
+def _bank_format_supported(ans):
+    """True when this entry's format is one we know how to apply."""
+    return bool(ans) and str(ans.get("format") or "").lower() in _BANK_FORMATS
+
+
+def _bank_answer_parts(ans):
+    """Extract (letters, fill_answers) from a bank entry, order-normalised.
+
+    `letters` applies to CHOICE questions in order; `fill_answers` applies to the
+    blanks of FILL questions in order. The two lists are independent, because the
+    bank records which part of the article each answer belongs to.
+    """
+    letters = [str(x).strip().upper() for x in (ans.get("letters") or [])]
+    fills = sorted((ans.get("fill_in_blank") or []),
+                   key=lambda e: e.get("index") or 0)
+    fills = [str(e.get("answer", "")).strip() for e in fills]
+    return letters, fills
+
+
+def _letter_to_option_index(letter, question):
+    """Map an answer letter ("B") to a 0-based option index, or None."""
+    letter = (letter or "").strip().upper()
+    if len(letter) != 1 or not letter.isalpha():
+        return None
+    opts = question.get("options") or []
+    # Prefer the label the DOM actually rendered (A/B/C/...)
+    for i, o in enumerate(opts):
+        lab = str(o.get("label") or "").strip().upper().rstrip(".")
+        if lab == letter:
+            return i
+    # Fall back to positional (A=0, B=1, ...)
+    idx = ord(letter) - ord("A")
+    return idx if 0 <= idx < len(opts) else None
+
+
+def _resolve_fill_value(raw, question, blank_i):
+    """Resolve one bank fill answer into what `set_answers` expects.
+
+    Two shapes occur in the data:
+      * free text ("cargo")               -> use as-is
+      * a bare letter ("E") on word-bank questions -> map through this blank's
+        select options to their `value` (e.g. "E-swimming hole")
+
+    A bare letter that cannot be resolved is a REJECT, not a guess: submitting a
+    wrong value silently is worse than asking the AI.
+    """
+    raw = str(raw or "").strip()
+    if not raw:
+        return None
+    if len(raw) == 1 and raw.isalpha():
+        groups = question.get("select_options") or []
+        grp = groups[blank_i] if blank_i < len(groups) else (
+            groups[0] if groups else None)
+        if not grp:
+            return None
+        want = raw.upper()
+        for o in grp:
+            val = str(o.get("value") or "")
+            lab = str(o.get("label") or "").strip().upper().rstrip(".")
+            if lab == want or val.upper().startswith(want + "-"):
+                return val
+        # single-letter answer with no matching option: let it through only when
+        # the question is a plain text fill (no option list at all)
+        return raw if not groups else None
+    return raw
+
+
+def _bank_answers_for(ans, questions):
+    """Turn a bank entry into `[[qIndex, value], ...]` for these questions.
+
+    Returns `(answers, None)` on success or `(None, reason)` when the bank entry
+    cannot be applied to this article — for example because the question count
+    changed since the bank was recorded. Mismatches are REJECTED rather than
+    partially applied: a half-applied answer set is a silently wrong submission.
+    """
+    if not _bank_format_supported(ans):
+        return None, f"unsupported format={ans.get('format')!r}"
+
+    letters, fills = _bank_answer_parts(ans)
+    choice_qs = [q for q in questions if q.get("kind") == "choice"]
+    fill_qs = [q for q in questions if q.get("kind") == "fill"]
+
+    if len(letters) != len(choice_qs):
+        return None, (f"bank has {len(letters)} choice answer(s) but the article "
+                      f"has {len(choice_qs)} choice question(s)")
+
+    # Distribute the flat fill answers across fill questions by each one's blank
+    # count, in order.
+    need = sum((q.get("blanks") or 0) for q in fill_qs)
+    if len(fills) != need:
+        return None, (f"bank has {len(fills)} fill answer(s) but the article "
+                      f"needs {need} for {len(fill_qs)} fill question(s)")
+
+    out = []
+    for q, letter in zip(choice_qs, letters):
+        if len(letter) != 1 or not letter.isalpha():
+            # The bank records an unresolved answer (e.g. raw "CADB(?)" becomes
+            # letters ["C","A","D","B","?"]). That article cannot be answered
+            # from the bank at all, so the caller must fall back to the model.
+            return None, (f"the bank records an unknown answer ({letter!r}) for "
+                          f"question {q.get('index')}")
+        idx = _letter_to_option_index(letter, q)
+        if idx is None:
+            return None, (f"letter {letter!r} does not match an option of "
+                          f"question {q.get('index')}")
+        out.append([q["index"], idx])
+
+    pos = 0
+    for q in fill_qs:
+        n = q.get("blanks") or 0
+        vals = []
+        for blank_i in range(n):
+            val = _resolve_fill_value(fills[pos], q, blank_i)
+            if val is None:
+                return None, (f"could not resolve fill answer "
+                              f"{fills[pos]!r} for question {q.get('index')} "
+                              f"blank {blank_i + 1}")
+            vals.append(val)
+            pos += 1
+        out.append([q["index"], vals])
+
+    out.sort(key=lambda a: a[0])
+    return out, None
 
 
 def _match_answer_bank(article_title):
     """Look up an article title in the answer bank.
-    Returns (answers_dict, match_info) or (None, None).
-    The answers_dict has .format, .letters, .fill_in_blank fields.
+
+    Returns `(answers_dict, match_info)` or `(None, None)`.
     """
     if not _ANSWER_BANK:
         return None, None
@@ -253,28 +417,31 @@ def _match_answer_bank(article_title):
     if not art_key or len(art_key) < 6:
         return None, None
 
-    # 1) Exact match
-    if art_key in _ANSWER_BANK:
-        return _ANSWER_BANK[art_key], "exact"
+    # 1) Exact match on the normalised key
+    hit = _ANSWER_BANK.get(art_key)
+    if hit:
+        return hit["answers"], "exact"
 
-    # 2) Substring match: article title contains bank key or vice versa
-    for bank_key, bank_ans in _ANSWER_BANK.items():
+    # 2) Substring match on the normalised key (spaces are already stripped on
+    # both sides, so this is safe and punctuation-insensitive).
+    for bank_key, entry in _ANSWER_BANK.items():
         if len(bank_key) >= 10 and (bank_key in art_key or art_key in bank_key):
-            return bank_ans, f"substring ({bank_key[:30]}…)"
+            return entry["answers"], f"substring ({bank_key[:30]}…)"
 
-    # 3) Word-level overlap
-    art_words = set(art_key.split())
-    best_score, best_entry = 0, None
-    for bank_key, bank_ans in _ANSWER_BANK.items():
-        bank_words = set(bank_key.split())
+    # 3) Word-level overlap on the ORIGINAL titles. Splitting the normalised key
+    # would produce one token per title and make this branch dead code.
+    art_words = _title_words(article_title)
+    best_score, best_answers = 0.0, None
+    for entry in _ANSWER_BANK.values():
+        bank_words = _title_words(entry["title"])
         if not art_words or not bank_words:
             continue
         overlap = len(art_words & bank_words)
         score = overlap / max(len(art_words | bank_words), 1)
         if score > 0.7 and score > best_score:
-            best_score, best_entry = score, bank_ans
-    if best_entry:
-        return best_entry, f"fuzzy ({best_score:.0%})"
+            best_score, best_answers = score, entry["answers"]
+    if best_answers is not None:
+        return best_answers, f"fuzzy ({best_score:.0%})"
 
     return None, None
 
@@ -1761,29 +1928,19 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
             json.dump({"title": content["title"], "passage": content["passage"],
                        "questions": questions}, f, ensure_ascii=False, indent=2)
 
-        # ---- answer bank: only for all-choice articles ----
+        # ---- answer bank: apply when it matches this article's exact shape ----
         data = None
-        choice_qs = [q for q in questions if q["kind"] == "choice"]
-        all_choice = len(choice_qs) == len(questions)
         bank_ans, match_info = _match_answer_bank(content["title"] or name)
         if not bank_ans:
             bank_ans, match_info = _match_answer_bank(name)
-        if bank_ans and bank_ans.get("format") in ("letters", "letter_and_fill"):
-            letters = bank_ans.get("letters", [])
-            if not all_choice:
-                print(f"  [BANK] matched ({match_info}) but this article has "
-                      f"fill-in questions — asking AI")
-            elif len(letters) != len(choice_qs):
-                print(f"  [BANK] matched ({match_info}) but bank has {len(letters)} "
-                      f"letters for {len(choice_qs)} questions — asking AI")
+        if bank_ans:
+            bank_answers, why = _bank_answers_for(bank_ans, questions)
+            if bank_answers is not None:
+                data = {"status": "answers_ready", "answers": bank_answers}
+                print(f"  [BANK] matched ({match_info}) — "
+                      f"{len(bank_answers)} answer(s), skipping the AI round-trip")
             else:
-                letter_map = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
-                data = {"status": "answers_ready",
-                        "answers": [[q["index"], letter_map[L.upper()]]
-                                    for q, L in zip(choice_qs, letters)]}
-                print(f"  [BANK] matched ({match_info}) — {len(letters)} answers")
-        elif bank_ans:
-            print(f"  [BANK] found but format={bank_ans.get('format')} — asking AI")
+                print(f"  [BANK] matched ({match_info}) but {why} — asking AI")
 
         if data is None:
             article_data = {

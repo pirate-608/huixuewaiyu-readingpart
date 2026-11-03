@@ -2889,3 +2889,239 @@ junction 是正确的：只删连接点、不动目标）。测试时用的是 `
 ```
 826f2ea  feat(install-skill): target agents and scope explicitly, and fix silent uninstall
 ```
+
+---
+
+## 39. ✅ 提示词一键配置（`setup-mcp --host` + `SETUP.md`）
+
+用户的想法：**不手动装 uv / skill / MCP，而是复制一段提示词让 agent 全包**。
+
+### 39.1 设计核心：分工，而不是让 agent 自由发挥
+
+| 谁 | 做什么 |
+|---|---|
+| **提示词** | 顺序、每步的**验证方法**、如何判断环境 |
+| **工具** | 确定性、幂等、可校验的命令 |
+
+**关键约束：agent 不许手写配置文件**（缩进/格式极易出错）——必须走 `setup-mcp`。
+
+### 39.2 🔍 关键发现：三个 agent 的注册格式**完全不同**
+
+这才是有必要实现 `--host` 的原因：
+
+| Agent | 文件 | 格式 | 顶层结构 |
+|---|---|---|---|
+| Claude Code | `<项目>/.mcp.json` | **JSON** | `{"mcpServers": {...}}` |
+| DSH | `profiles/<p>/cordis.patch.yml` | **YAML** | 顶层**数组** `{id,name,config}` |
+| **Codex** | `~/.codex/config.toml` | **TOML** | `[mcp_servers.<name>]` |
+
+Codex 那条是本次查出来的（参考同文件已有的 `[mcp_servers.unityMCP]`）：
+
+```toml
+[mcp_servers.elang]
+command = "...elang.EXE"
+args = ["mcp"]
+startup_timeout_sec = 120
+```
+
+### 39.3 ✅ 安全属性（全部实现并测试）
+
+| 属性 | 实现 |
+|---|---|
+| **幂等** | 重跑报 `up to date`，不产生重复条目 |
+| **原子** | 先写同级临时文件再 `os.replace` |
+| **可回滚** | 先备份；校验失败自动还原 |
+| **写后校验** | 重新解析；失败则回滚 |
+| **不打印内容** | **只打印新增行**，绝不回显文件主体 |
+
+最后一条不是洁癖 —— **用户的 `~/.codex/config.toml` 里有 API key 明文**
+（`ANTHROPIC_AUTH_TOKEN = "sk-..."`）。测试里专门埋了一个假密钥，验证它
+**从不出现在输出中**。
+
+### 39.4 几个刻意的决定
+
+- **条目指向已安装的 `elang`**，不再依赖仓库路径或 venv 位置
+- **DSH 按 id 唯一**：已有的 `mcp-elang` **原地替换**，不追加第二条
+- **Codex 拒绝改写不一致的表**：它会比对规范化渲染，若不同则**拒绝**
+  而非猜测（那是用户的活配置）
+- **无 pyyaml 时 DSH 回退为字面追加并明说**，而不是直接失败
+- **新增 `PyYAML` 依赖**：要"重新解析校验"就必须有真正的解析器；
+  追加器无法校验
+
+### 39.5 ✅ 测试：33 项检查，全在**假配置**上跑
+
+`scripts/test_setup_mcp.py`（固化为仓库资产）：
+
+```
+33/33 checks passed
+```
+
+覆盖：首次安装、幂等、**已有内容逐字节保留**、非法 JSON 拒绝、
+**植入的密钥不被回显**、未知 host 拒绝、`--dry-run` 不写盘。
+
+**它重定向 HOME 与各 host 的环境变量到 temp 沙箱** ——
+真实 agent 配置**从未被触碰**。
+
+> 期间发现并修掉一个行为不一致：codex 起初不完全幂等（重跑报"已存在"而非
+> "无需更改"）。现在三个 host 行为一致。
+
+### 39.6 `SETUP.md`：给 agent 读的契约
+
+6 步流程，每步带**验证命令**，并明确约束：
+
+- 第 0 步**先判断自己在哪个 agent 里**（这是 agent 独有、脚本做不到的能力）
+- 第 3 步**让用户自己填密码**，agent 不得读取/回显/转述
+- 第 4 步**问用户** scope，不许猜
+- 失败时**报告原始错误**，不许跳过或假装成功
+- 说明**MCP server 必须在文件沙箱外运行**（Playwright 需要命名管道）
+- 附排查表（现象 → 原因 → 处理）
+
+### 39.7 README 顶部的一句话提示词
+
+```
+读 https://github.com/pirate-608/huixuewaiyu-readingpart 的 SETUP.md，
+按里面的步骤帮我装好这个工具。我是 <DSH / Codex / Claude Code> 用户。
+```
+
+### 39.8 ✅ 从远端安装后逐条验证
+
+```
+[第1步] elang list                → 7 个子命令 ✓
+[第2步] elang install-browser --check → OK: a browser build is available ✓
+[第3步] elang doctor              → launch ok / username set / password set /
+                                    All good. / exit 0 ✓
+[第5步] elang setup-mcp --dry-run → 正确显示将新增的行 ✓
+```
+
+### 39.9 提交
+
+```
+2cae424  feat(setup-mcp): register with claude/dsh/codex safely, plus one-prompt setup
+```
+
+---
+
+## 40. 🐞 答案库实际作用为 0（四个缺陷，已修）
+
+用户问"答案库有起到实际作用吗"。查证结论：**加载 84 条，实际可用 0 条**。
+
+### 40.1 证据：逐关卡漏斗
+
+| 关卡 | 剩余 | 原因 |
+|---|---|---|
+| 全部条目 | 93 | |
+| 过加载器（跳过 unknown） | 89 | |
+| 过标题长度（≥6） | 86 | |
+| **过 format 闸门** | **5** | 代码查 `"letters"`（复数），数据是 `"letter"`（单数） |
+| **过 `all_choice` 闸门** | **0** | 剩 5 条都是 `letter_and_fill`，含填空即被拒 |
+
+数据真实分布：
+
+```
+letter            63      ← 单数，全部被拒
+fill_in_blank     16      ← 无处理器
+letter_and_fill    5      ← 过 format，但被 all_choice 拦
+```
+
+**运行时日志 `Answer bank loaded: 84 entries` 给人"有 84 条可用"的错觉。**
+
+### 40.2 四个独立缺陷
+
+**1. format 单复数不匹配**
+
+```python
+if bank_ans.get("format") in ("letters", "letter_and_fill"):   # 查复数
+{"format": "letter", ...}                                      # 数据是单数
+```
+
+67 条 `letter` 全部静默被拒。
+
+**2. `all_choice` 闸门 + 填空从不处理**
+
+原代码只支持"全是选择题"的文章；而实站文章形状是 **5 选择 + 1 填空**，
+所以连那 5 条 `letter_and_fill` 也过不了。
+
+**3. 模糊匹配是死代码**
+
+```python
+art_words = set(art_key.split())     # art_key 已被去掉所有空格 → 单个 token
+```
+
+`_normalize_title` 去掉了空格，`.split()` 永远只得到一个元素，词重叠比较无意义。
+
+**4. 日志误导**
+
+报"84 entries"，但没说明其中多少可用。
+
+### 40.3 修复
+
+**统一映射函数 `_bank_answers_for(ans, questions)`** 取代 `all_choice` 闸门：
+
+- 银行 `letters` **按顺序**对应**选择题**
+- 银行 `fill_in_blank` **按 index 排序**后，按每个填空题的 `blanks` 数**分配给填空题**
+- 数量必须**完全匹配**，否则**拒绝并给出原因** —— 半套答案等于静默答错
+- **裸字母填空答案**（词库题）通过该空的 `select_options` 映射成 option value
+  （`"E"` → `"E-swimming hole"`）；**映射不到就拒绝，绝不猜**
+
+**格式名接受数据里实际存在的全部拼写**：`letter` / `letters` /
+`letter_and_fill` / `fill_in_blank`。
+
+**模糊匹配改用原始标题**：索引里保留 `{"answers":…, "title":…}`，
+`_title_words()` 对**原始标题**取词。
+
+**日志改为格式细分**：
+
+```
+[elang] Answer bank loaded: 84 entries (16 fill_in_blank, 63 letter,
+        5 letter_and_fill) ...; 3 title(s) too short to match
+```
+
+### 40.4 ✅ MCP 路径接入（此前完全不用）
+
+`elang_session.open_next()` 现在会查答案库，命中时在信封里附：
+
+```json
+{"bank_answers": [[0,3],[1,2],[2,2],[3,0]],
+ "hint": "This article is in the answer bank: you may call
+          elang_submit_answers with bank_answers directly."}
+```
+
+未命中但标题命中时附 `bank_note` 说明原因（如数量不匹配）。
+异常被捕获，**绝不让答案库拖垮整轮运行**。
+
+### 40.5 ✅ 测试
+
+新增 `scripts/test_answer_bank.py`：
+
+- `letter` 格式被接受（原 bug 的回归测试）
+- `letter_and_fill` 的填空按空分组
+- 裸字母 → option value 映射
+- 无法映射的字母**被拒绝**
+- 数量不匹配**被拒绝**（缺选择题/缺填空各一例）
+- 未知格式被拒绝
+- 模糊匹配（含"标题多出几个词"的正例）
+- **MCP 路径**：命中 / 近失 / 未命中三种情况
+
+### 40.6 自洽性验证
+
+用每条记录**自身的形状**合成题目再映射：**83/84 成功**。
+唯一失败的是数据本身有问题的一条：
+
+```
+title: A Letter of Refusal   raw: "CADB(?)"   letters: [...'?']
+```
+
+它的报错现在明确说"bank records an unknown answer ('?')"，
+而不是含糊的"字母不匹配选项"。
+
+### 40.7 ⚠️ 未解决的问题：覆盖率
+
+修好代码路径后，**实测 6 篇真实文章仍然全部 miss** —— 因为题库里根本没有这些标题。
+
+```
+题库: 84 条可用 vs 站点 ~220 篇
+已处理的 6 篇: 0 命中
+```
+
+**代码路径现在是对的；答案库是否真的省时间，取决于题库覆盖和线上题目数量是否与记录一致。**
+这属于数据问题，不是代码问题。
