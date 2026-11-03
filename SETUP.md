@@ -210,6 +210,7 @@ elang setup-mcp --host <agent> --dry-run
 | MCP 注册后看不到工具 | agent 没重启 | 重启它 |
 | `elang_status` 报错 | server 没连上 | 检查 `command` 路径与配置格式 |
 | `elang_start` 失败但 `status` 正常 | 浏览器/沙箱问题 | 见上面的沙箱说明 |
+| 登录页打不开或登录失败 | 代理/TUN 与站点网络限制冲突 | 关闭 TUN 与全局代理，或让 `elang.zju.edu.cn`、`zjuam.zju.edu.cn` 直连 |
 
 ---
 
