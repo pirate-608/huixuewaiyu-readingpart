@@ -1,8 +1,28 @@
 # 慧学外语阅读自动答题
 
+> **读者：人类用户**（也可被 agent 当作全景概览）。
+> 执行 agent 的契约是 [`SKILL.md`](SKILL.md)；开发 agent 看 [`CLAUDE.md`](CLAUDE.md)。
+
 Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.edu.cn)英语阅读练习。
 
 > **致谢** — 本项目基于开源项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 开发，感谢原作者 [shixu2026](https://gitee.com/shixu2026) 的贡献。
+
+## 两种 agent，两套文档
+
+本项目涉及两类 agent，**文档严格分开**，不要交叉使用：
+
+| 角色 | 是做什么的 | 该读什么 | 在仓库外能看到吗 |
+|---|---|---|---|
+| **执行 agent** | 跑本 skill **答题**的 agent | [`SKILL.md`](SKILL.md)（契约）、[`SETUP.md`](SETUP.md)（安装）、`.env.example` | ✅ 会随 skill 装进 agent 的 skill 目录 |
+| **开发 agent** | **开发 / 调试**本项目的 agent | [`CLAUDE.md`](CLAUDE.md)、[`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md)、[`MCP_DESIGN.md`](MCP_DESIGN.md)、[`DISTRIBUTION.md`](DISTRIBUTION.md)、[`SETUP_DESIGN.md`](SETUP_DESIGN.md)、[`archive/`](archive/README.md) | ❌ **不发货**，只在仓库里 |
+
+**约定**：
+
+- 每份文档开头都有一行「读者：…」，先看那行再决定要不要读
+- `SKILL.md` **只讲怎么用**，不含实现细节；实现细节在 `CLAUDE.md`
+- 开发文档**不会**被 `elang install-skill` 复制出去 —— 执行 agent 的 skill 目录里
+  只有契约与安装说明
+- 往 skill payload 里加文件前先问：**执行 agent 需要它吗？** 不需要就别加
 
 ## 交给 agent 一句话搞定
 
@@ -309,12 +329,16 @@ python scripts/doctor.py
 
 ## 文档
 
-| 文件 | 内容 |
-|---|---|
-| [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md) | 站点改版后的实测事实、踩过的坑、被推翻的假设 |
-| [`MCP_DESIGN.md`](MCP_DESIGN.md) | MCP 化的设计依据与分层实施计划 |
-| [`DISTRIBUTION.md`](DISTRIBUTION.md) | DSH / Codex / Claude Code 三平台分发设计 |
-| [`archive/README.md`](archive/README.md) | 归档了什么、为什么 |
+| 文件 | 读者 | 内容 | 随 skill 分发 |
+|---|---|---|---|
+| [`SKILL.md`](SKILL.md) | 执行 agent | 契约与操作流程 | ✅ |
+| [`SETUP.md`](SETUP.md) | 执行 agent | 安装与配置步骤 | ✅ |
+| [`CLAUDE.md`](CLAUDE.md) | 开发 agent | 架构、依赖方向、开发命令 | ❌ |
+| [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md) | 开发 agent | 实测事实、踩过的坑、被推翻的假设 | ❌ |
+| [`MCP_DESIGN.md`](MCP_DESIGN.md) | 开发 agent | MCP 化设计记录（见文首状态说明） | ❌ |
+| [`DISTRIBUTION.md`](DISTRIBUTION.md) | 开发 agent | 三平台分发与注册方式 | ❌ |
+| [`SETUP_DESIGN.md`](SETUP_DESIGN.md) | 开发 agent | 一键配置流程的设计依据 | ❌ |
+| [`archive/README.md`](archive/README.md) | 开发 agent | 归档了什么、为什么 | ❌ |
 
 ## License
 

@@ -75,21 +75,25 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 # The skill carries no implementation: the contract presents `elang <cmd>` as the
 # only interface. A repo checkout can still run `python scripts/...` directly for
 # development, but that is a developer path, not part of what gets installed.
-# Documentation and contract ONLY. The mechanism lives in the installed tool
-# (`elang`), so copying `scripts/` here would create a second copy of the code that
-# drifts from the real one — and it cannot even be satisfied from a `uv tool
-# install`, which has no repo layout, so every install printed "missing: scripts".
-# SKILL.md now states plainly that the interface is `elang ...`, not
-# `python scripts/...`.
+# EXECUTION-side docs only.
+#
+# This project has two audiences and they must not be mixed:
+#   * 执行 agent (runs the skill to answer questions) -> SKILL.md, SETUP.md
+#   * 开发 agent (works on this project)              -> CLAUDE.md, MIGRATION_CHECKPOINT.md,
+#                                                        MCP_DESIGN.md, DISTRIBUTION.md,
+#                                                        SETUP_DESIGN.md
+# Development docs deliberately do NOT ship: an answering agent has no use for a
+# design log, and before this split its skill directory received 2000+ lines of
+# development history.
+#
+# The implementation is not copied either. It lives in the installed tool (`elang`),
+# so a copy here would drift — and from a `uv tool install` there is no repo layout
+# to copy from, so every install printed "missing: scripts".
 PAYLOAD = [
-    ("SKILL.md", "SKILL.md"),                              # the contract itself
-    ("README.md", "README.md"),                            # user-facing overview
-    ("SETUP.md", "SETUP.md"),                              # agent install guide
-    (".env.example", ".env.example"),                      # credential template
-    ("CLAUDE.md", "CLAUDE.md"),                            # agent-facing guidance
-    ("MIGRATION_CHECKPOINT.md", "MIGRATION_CHECKPOINT.md"),
-    ("MCP_DESIGN.md", "MCP_DESIGN.md"),
-    ("DISTRIBUTION.md", "DISTRIBUTION.md"),
+    ("SKILL.md", "SKILL.md"),          # the contract: the ONLY doc a run agent needs
+    ("SETUP.md", "SETUP.md"),          # install/config steps
+    (".env.example", ".env.example"),  # credential template
+    ("README.md", "README.md"),        # human/user overview
 ]
 
 # Files packaged under `elang/share/` (see pyproject force-include).

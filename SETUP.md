@@ -1,5 +1,9 @@
 # 安装与配置指引（给 agent 读）
 
+> **读者：执行 agent**（安装 / 配置本工具）。开发 agent 看 `CLAUDE.md`。
+> 第 0 步先确认你在哪个宿主（DSH / Codex / Claude Code）。
+
+
 你正在帮用户安装配置 **huixuewaiyu-readingpart**（慧学外语阅读自动答题工具）。
 
 **请严格按顺序执行，每步验证通过再进入下一步。**

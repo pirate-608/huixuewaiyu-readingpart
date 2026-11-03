@@ -73,15 +73,15 @@ packages = ["src/elang"]
 # command silently copied nothing. `install_skill.py` now resolves these through
 # `importlib.resources` (same approach as the answer bank), falling back to the
 # repo layout for development.
+# EXECUTION-side docs only — these are what `elang install-skill` copies into an
+# agent's skill directory. Development docs (CLAUDE.md, MIGRATION_CHECKPOINT.md,
+# MCP_DESIGN.md, DISTRIBUTION.md, SETUP_DESIGN.md) are deliberately NOT shipped:
+# an answering agent does not need them, and shipping them put a 2000-line
+# development log inside every installed skill.
 "SKILL.md" = "elang/share/SKILL.md"
-"README.md" = "elang/share/README.md"
 "SETUP.md" = "elang/share/SETUP.md"
 ".env.example" = "elang/share/.env.example"
-"CLAUDE.md" = "elang/share/CLAUDE.md"
-"MIGRATION_CHECKPOINT.md" = "elang/share/MIGRATION_CHECKPOINT.md"
-"MCP_DESIGN.md" = "elang/share/MCP_DESIGN.md"
-"DISTRIBUTION.md" = "elang/share/DISTRIBUTION.md"
-"references/parse_answers.py" = "elang/share/parse_answers.py"
+"README.md" = "elang/share/README.md"
 
 [tool.hatch.build.targets.sdist]
 include = [

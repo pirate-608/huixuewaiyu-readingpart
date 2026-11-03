@@ -3,6 +3,10 @@ name: huixuewaiyu-readingpart
 description: Automate English reading exercises on 慧学外语 (elang.zju.edu.cn). Use this skill whenever the user wants to complete reading comprehension questions on elang.zju.edu.cn, mentions "慧学外语", "elang", "英文阅读", or needs help with ZJU English reading homework. Triggers on URLs containing elang.zju.edu.cn, mentions of 慧学外语阅读, or requests to batch-complete reading exercises.
 ---
 
+> **读者：执行 agent**（用本 skill 答题）。
+> 开发/调试本项目的 agent 请看仓库 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md) —— 本文不含实现细节，
+> 也不解释怎么改代码。
+
 # 慧学外语阅读自动答题
 
 通过 Playwright 驱动 elang.zju.edu.cn 的 **PC 版界面**，读取文章与题目，
@@ -10,8 +14,6 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 
 工具已经装好时，一切从 **`elang`** 命令开始。**不要再去找仓库里的 `.venv` 或
 用 `python scripts/...`** —— 那是开发布局，不是使用方式。
-
-> 改代码前读 `MIGRATION_CHECKPOINT.md`：那里有实测事实与被推翻的假设。
 
 ---
 
@@ -205,28 +207,23 @@ MCP 模式下用 `elang_get_captcha` / `elang_solve_captcha`，逻辑相同。
 
 ---
 
-## 站点结构（PC 版）
+## 工具内部做了什么（你不需要操作页面）
 
-| 路由 | 组件 | 关键数据 |
-|---|---|---|
-| `#/pc/read/index` | `PcReadIndex` | `$data.listData` |
-| `#/pc/read/learn?subject_id=` | `PcReadLearn` | `$data.resourceList` |
-| `#/pc/read/praxis?log_id=&resources_id=` | `PcReadPraxis` | `$data.jobList` |
+了解流程有助于判断卡在哪一步，但你**不需要**碰 DOM 或 Vue：
 
-- **`toPraxis(item)` 由服务端签发 `log_id`**，所以 praxis URL 不能手工拼
-- **完成状态**用应用自己的 `normalizeStatus`（`status===2` 或 `hisLabel===1`）
-- **作答**：选择题 `selectOption()`；填空题 `insertWordAnswers[jobId]`（每空一个值）
-- **提交**是两步：`openSubmitConfirm()` → `confirmSubmit()`
+```
+CAS 自动登录（.env 凭据）
+  → 主题列表 → 文章列表（跳过已完成）
+  → 调 toPraxis 让服务端签发 log_id，进入题目页
+  → 验证码闸门（通过后题目才加载）
+  → 作答 → 两步确认提交 → 回到文章列表
+```
 
-### Vue 访问的陷阱
+完成状态由应用自己的 `normalizeStatus` 判定，与界面显示一致。
+每篇做完会更新 `<ipc>/elang_checkpoint.json`。
 
-`page.evaluate` **返回**对象给的是副本，而 Vue 实例**根本无法序列化到 Python**。
-把实例当参数传回去只会得到空值，所有字段读成 0 —— 这正是曾经
-"同一页面一处说有验证码图、另一处说没有"的原因。
-所以实例**钉在页面里**（`window.__elangPraxisVm` / `window.__elangLearnVm`），
-所有读取都在浏览器内部完成。
-
----
+实现细节、站点组件名与 Vue 陷阱见仓库 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md) ——
+那是**开发 agent** 的文档，不随 skill 分发。
 
 ## 安装（工具没装时）
 

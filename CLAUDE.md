@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+> **读者：开发 agent**（开发 / 调试本项目）。
+> 答题的执行 agent 看 `SKILL.md`；**本文不随 skill 分发**。
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > ## ⚠️ 三条必须记住的规则
