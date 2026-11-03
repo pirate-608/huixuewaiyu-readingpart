@@ -133,7 +133,7 @@ elang_stop
 ### 方式 B：CLI（回退路径，你负责答题）
 
 ```bash
-elang run batch-all                        # 全部主题（220 篇）
+elang run batch-all                        # 全部主题（11 个，共 220 篇）
 elang run batch 26                         # 单个主题
 elang run batch-all --subjects-only        # 只列主题，零风险
 elang run batch-all --limit 1 --dry-run    # 安全试跑

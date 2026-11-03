@@ -1,10 +1,10 @@
-# CLAUDE.md
+# 开发指引
 
 > **读者：开发 agent**（开发 / 调试本项目）。
 > 答题的执行 agent 看 `SKILL.md`；**本文不随 skill 分发**。
 
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working in this repository.
 
 > ## ⚠️ 三条必须记住的规则
 >
@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Playwright 自动化，驱动慧学外语 (elang.zju.edu.cn) 的 **PC 版界面**完成英语阅读练习。
 读取文章与题目，交由 agent 作答，再用应用自己的 Vue 方法提交。
 
-四个组成部分：
+五个组成部分：
 
 | 文件 | 职责 |
 |---|---|

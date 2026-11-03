@@ -38,6 +38,10 @@ test-results/
 /tmp/elang_screenshots/
 
 # 其他
+# 归档的旧实现与旧文档。保留在本地供查阅，不入库：
+# 它们描述的是已废弃的协议与安装方式，放在仓库里只会让读者误判现状。
+/archive/
+
 /temp/  
 
 # 项目级 skill 安装目标（由 install-skill --scope project 写入）。

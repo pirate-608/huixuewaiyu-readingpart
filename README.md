@@ -128,6 +128,7 @@ elang setup-mcp --host <claude|dsh|codex>
 elang_start          打开浏览器并登录
 elang_status         查看状态（不会启动浏览器）
 elang_list_subjects  主题列表
+elang_list_lessons   某主题的文章列表
 elang_open_next      推进到下一篇，返回正文与题目
 elang_submit_answers 提交答案
 elang_get_captcha    获取验证码图片
@@ -259,9 +260,12 @@ huixuewaiyu-readingpart/
 ├── pyproject.toml              # 打包配置（hatchling）
 ├── README.md                   # 本文件
 ├── SKILL.md                    # skill 契约，三平台共用
-├── CLAUDE.md                   # 开发指引
+├── CLAUDE.md                   # 开发指引（Claude Code）
+├── AGENTS.md                   # 同一份开发指引，供读取 AGENTS.md 的宿主
+├── SECURITY.md                 # 历史重写说明与隐私约定
 ├── .env.example                # 凭据模板
 ├── .mcp.json.example           # MCP 注册模板，实际文件由 setup-mcp 生成
+├── .githooks/pre-commit        # 提交前隐私检查，需手动启用
 ├── requirements.txt
 ├── src/elang/
 │   ├── __init__.py             # 让平铺模块在两种布局下都能按裸名导入
@@ -277,8 +281,7 @@ huixuewaiyu-readingpart/
 │   ├── elang_session.py        # 显式状态机，零阻塞
 │   ├── elang_mcp.py            # MCP server，10 个工具
 │   └── setup.py                # 克隆本仓库后的一键安装
-├── references/                 # 题库，answers.json 同时打进 wheel
-└── archive/                    # 已过时的实现与文档，见 archive/README.md
+└── references/                 # 题库，answers.json 同时打进 wheel
 ```
 
 ### 从源码安装
@@ -326,13 +329,15 @@ python scripts/doctor.py
 | [`SKILL.md`](SKILL.md) | skill 契约与操作流程 |
 | [`SETUP.md`](SETUP.md) | 安装与配置步骤 |
 | [`CLAUDE.md`](CLAUDE.md) | 架构、依赖方向与开发命令 |
+| [`AGENTS.md`](AGENTS.md) | 同一份开发指引的副本，供读取 AGENTS.md 的宿主 |
 | [`SECURITY.md`](SECURITY.md) | 一次历史重写的说明与隐私约定 |
 | [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md) | 实测记录、被推翻的假设与已知问题 |
 | [`MCP_DESIGN.md`](MCP_DESIGN.md) | MCP 化设计记录 |
 | [`DISTRIBUTION.md`](DISTRIBUTION.md) | 三平台分发与注册方式 |
 | [`SETUP_DESIGN.md`](SETUP_DESIGN.md) | 一键配置流程的设计依据 |
-| [`archive/README.md`](archive/README.md) | 归档内容与原因 |
 
 ## License
 
-MIT
+MIT，见 [`LICENSE`](LICENSE)。
+
+上游项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 在其 README 中声明为 MIT，但仓库未附 LICENSE 文件。本项目沿用同一许可。

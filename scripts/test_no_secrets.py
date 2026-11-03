@@ -55,9 +55,6 @@ PRIVACY_PATTERNS = [
 
 # Files allowed to match, with the reason. Keep this list tiny and justified.
 ALLOW = {
-    # An archived installer that searches the usual Windows Python install dirs. It
-    # names standard locations, not this machine's layout, and it is not executed.
-    "archive/legacy-install/install.ps1": {"machine python path"},
     # Test fixtures deliberately contain fake C:\ paths for the config writer.
     "scripts/test_setup_mcp.py": {"local checkout"},
 }
