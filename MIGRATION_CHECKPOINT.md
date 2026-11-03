@@ -3125,3 +3125,104 @@ title: A Letter of Refusal   raw: "CADB(?)"   letters: [...'?']
 
 **代码路径现在是对的；答案库是否真的省时间，取决于题库覆盖和线上题目数量是否与记录一致。**
 这属于数据问题，不是代码问题。
+
+---
+
+## 41. ✅ `elang run` 成为可用回退：agent 就是答题方
+
+### 41.1 先纠正一个方向性错误
+
+用户说"我做模型答题"，我第一反应是**在工具里接 LLM API**（写了 `llm.py` +
+`ELANG_LLM_*` 配置）。**这是错的** —— 用户指的是 **agent 自己答题**。
+
+已全部撤销，`llm.py` 删除。教训：**这个工具的定位是"机制"，不是"智能"**；
+智能来自宿主 agent。
+
+### 41.2 真正的病根
+
+`elang run` 从来不是"半成品"，而是**闭环断了一半**：
+
+```
+elang run  →  写 elang_current.json  →  等 elang_signal.json
+                                              ↑
+                                    谁写？ review.py
+                                    —— 已被归档 ✗
+```
+
+所以它的真实能力退化成：**题库命中的文章能跑完，其余全部空等 600s 后标 timeout**。
+
+`CLAUDE.md` 里我甚至写过"答案不再走文件" —— 那句话在**没有替代答题方**的前提下
+等于宣布回退路径死亡。
+
+### 41.3 修复：把答题侧做成一等命令
+
+```
+elang pending              # 显示待答文章（立即返回）
+elang pending --brief      # 一行摘要
+elang pending --json       # 原始请求
+elang answer 0=A 1=C       # 选择题给选项字母
+elang answer "5=A,B,C"     # 填空题每空一个值
+elang answer --raw '[[0,1],[5,["A-x"]]]'
+elang skip / continue / stop
+```
+
+**`answer_ipc.py` 只 import `config`**，不 import `elang_reader` —— 所以答题侧
+**不需要 Playwright**。为此把 IPC 路径规则移到 `config.ipc_dir()`。
+
+### 41.4 关键设计：只有一侧阻塞
+
+| 侧 | 是否阻塞 |
+|---|---|
+| `elang run` | **是** —— 但它在自己的后台 job 里，这是它的职责 |
+| `elang pending` / `answer` / `skip` / `continue` / `stop` | **否**，全部立即返回 |
+
+**旧设计"双方互相等"的锅不在协议，在用法** —— 用 `job_output(wait=true)`
+去 poll 一个正在等你的进程，必然死锁。正确姿势：
+
+```
+1. elang run batch-all  作为后台 job 启动
+2. 轮询 elang pending --brief     （非阻塞）
+3. waiting_for_ai → elang pending 看题 → elang answer ...
+4. 直到 job 结束
+```
+
+`CLAUDE.md` / `SKILL.md` / `README` 都已按这个契约重写。
+
+### 41.5 两个真实细节
+
+**词库填空绑定的是 option 的 `value`，不是 label**
+
+所以 `elang answer "5=A,B"` 必须映射成 `["A-alpha","B-beta"]`，
+否则提交进去的是裸字母，页面不认。自由文本填空原样透传；
+映射不到时**不臆造**，交给页面判断。
+
+**作答必须校验严格**
+
+未知题号 / 未知选项字母 / 填空数量不对 / 格式错误 → **exit 1 且不写任何文件**。
+`status != waiting_for_ai` 时（比如 checkpoint 暂停）明确提示改用
+`elang continue` / `elang stop`，而不是写一个没人读的答案。
+
+### 41.6 打包遗漏
+
+`answer_ipc.py` 一开始**没进 wheel** —— `pyproject.toml` 的 force-include 是
+**显式列表**，新增模块必须手动加。装成 tool 后 `elang pending` 报
+`ModuleNotFoundError`。已补，并验证安装态可用。
+
+### 41.7 顺手修的回归
+
+`scripts/test_mcp.py` 读 `res.isError`，在 MCP 2.x（`is_error`）下崩。
+生产代码早有 shim，测试没有。已加同样的双拼写兼容。
+
+### 41.8 ✅ 验证
+
+- `scripts/test_answer_ipc.py`：**20/20** —— 显示、字母→索引、填空 value 映射、
+  raw 直通、5 种拒绝路径、3 个控制动词、checkpoint 情形
+- 全量回归：answer_bank / setup_mcp(33) / mcp 协议 全通过
+- 从 **git 安装**后：`elang doctor` → All good；`elang pending --brief`
+  **82ms 返回**；`elang answer 0=B` → `[[0,1]]` 正确
+
+### 41.9 提交
+
+```
+e0457d0  feat(cli): make `elang run` a real fallback — the agent answers it
+```
