@@ -8,14 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > ## ⚠️ 三条必须记住的规则
 >
-> **1. 不要阻塞等待。** MCP 模式下没有任何 tool 会等待 —— 每步立即返回状态
+> **1. 不要阻塞等待。** MCP 模式下没有任何 tool 会等待，每步立即返回状态
 > 与可执行的下一步。用"挂着等输出"的方式轮询会让双方互相等待。
 >
 > **2. 不要按进程名杀进程。** `Get-Process msedge | Stop-Process` 会连带杀掉
 > 用户自己的 WebView2 桌面应用。只停自己的 job。
 >
 > **3. 不要依赖系统 Python 的 site-packages。** 不用 `--system-site-packages`，
-> 不往系统解释器装包 —— 每台机器全局环境不同，借来的依赖换机即失效。
+> 不往系统解释器装包。每台机器全局环境不同，借来的依赖换机即失效。
 > `doctor.py` 会检测并警告这种情况。
 >
 > 改动代码前请读 [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md)：
@@ -31,7 +31,7 @@ Playwright 自动化，驱动慧学外语 (elang.zju.edu.cn) 的 **PC 版界面*
 | 文件 | 职责 |
 |---|---|
 | `scripts/elang_reader.py` | **引擎**：浏览器、抓取、作答、提交 + CLI 批处理流程 |
-| `scripts/elang_session.py` | **显式状态机**（MCP Level 1）—— 每个方法立即返回，绝不阻塞 |
+| `scripts/elang_session.py` | **显式状态机**（MCP Level 1），每个方法立即返回，不阻塞 |
 | `scripts/elang_mcp.py` | MCP server（10 个 tool），薄包装状态机 |
 | `scripts/answer_ipc.py` | **CLI 回退的答题侧**：`elang pending/answer/skip/continue/stop` |
 | `scripts/config.py` | 凭据与 IPC 路径解析（**全项目唯一实现**） |
@@ -90,11 +90,11 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 键名两套都认（带 ELANG_ 前缀的优先）：
     ELANG_CAS_USERNAME  /  CAS_USERNAME
     ELANG_CAS_PASSWORD  /  CAS_PASSWORD
-真实环境变量优先于以上任何文件 —— 两套键名都适用。
+真实环境变量优先于以上任何文件，两套键名都适用。
 ```
 
 **为什么 `./.env` 就够**：所有 agent（DSH / Claude Code / Codex）运行命令时
-工作目录都是工作区根 —— 这是共同契约，所以不需要向上遍历、agent 探测、
+工作目录都是工作区根。这是共同契约，所以不需要向上遍历、agent 探测、
 指针文件或 `DSH_*` 变量。
 
 **MCP server 的 cwd 也是宿主 cwd**（实测）。所以同一个解析器对两种入口都成立。
@@ -105,14 +105,14 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 ### 浏览器
 
 **自带 Chromium** + `launch_persistent_context`，profile 在 `~/.elang/browser-profile`
-（用 `ELANG_PROFILE_DIR` 覆盖）。不需要系统装浏览器 —— 这是可分发的前提。
+（用 `ELANG_PROFILE_DIR` 覆盖）。不需要系统装浏览器，这是可分发的前提。
 `ELANG_BROWSER=msedge` 是逃生口。
 
 **不要在代码里钉死浏览器版本或路径。** 需要哪个构建取决于 Playwright 版本；
 `doctor.py` 负责报告并打印安装命令。`requirements.txt` 里的
 `playwright>=1.49,<1.61` 区间必须与浏览器一起升级。
 
-实测：持久化 profile **本身不保留 CAS 会话** ——
+实测：持久化 profile **本身不保留 CAS 会话**。
 `iPlanetDirectoryPro` 与 zjuam 的 `JSESSIONID` 是会话 cookie，会被丢弃。
 所以 `elang_session.json`（cookies + localStorage）的显式重放**是必需的**，不是优化。
 
@@ -142,7 +142,7 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 只能按位置点击，再从 URL 核对。
 
 更重要的是：**`page.evaluate` 返回对象给的是副本，而 Vue 实例根本无法序列化到 Python。**
-把它当参数传回去会得到空值，所有字段读成 0 —— 这就是曾经
+把它当参数传回去会得到空值，所有字段读成 0。这就是曾经
 "同一页面一处报告有验证码图、另一处报告没有"的根因。
 所以实例**钉在页面里**（`window.__elangPraxisVm` / `window.__elangLearnVm`），
 所有读取都在浏览器内部完成。
@@ -170,11 +170,11 @@ elang skip / continue / stop
 `answer_ipc.py` **只依赖 config**，不 import `elang_reader`，所以不需要 Playwright。
 
 > **关键：只有 `elang run` 自己在后台阻塞，agent 侧永远不阻塞。**
-> 旧的痛点是双方互相等 —— 那是用法错误（拿"挂着等输出"去 poll），不是协议的问题。
+> 旧的痛点是双方互相等，那是用法错误（以等待输出的方式轮询），不是协议本身的问题。
 > 正确姿势：`elang run` 作为后台 job 启动，agent 用 `elang pending --brief`
 > 轮询（立即返回），需要作答时再 `elang answer`。
 >
-> MCP 路径不需要这套东西 —— 它本身就是非阻塞状态机。
+> MCP 路径不需要这套机制，它本身就是非阻塞状态机。
 
 ### CAPTCHA
 
@@ -182,7 +182,7 @@ elang skip / continue / stop
 
 1. ddddocr（最多 3 次；**图片没换就停止重试**，这是防死循环的守卫）
 2. 视觉/文件交接
-3. `ELANG_CAPTCHA_MANUAL=1` 时完全不碰 `verifyCode`，等用户自己输入 ——
+3. `ELANG_CAPTCHA_MANUAL=1` 时完全不碰 `verifyCode`，等待用户自行输入，
    因为输错会让应用刷新图片，**清掉用户已输入的内容**
 
 绝不主动调用 `refreshCaptcha()`：那会在健康的页面上**制造**一个验证码。
@@ -219,7 +219,7 @@ git config core.hooksPath .githooks
 
 ## 容易踩的坑
 
-- **`job_output(wait=true)` 会挂住**，而脚本可能正等着你 —— 用非阻塞读取
+- **`job_output(wait=true)` 会挂住**，而脚本可能正等待响应。应使用非阻塞读取
 - **`%LOCALAPPDATA%\Temp` 在沙箱下可能挂死**（实测 >25s，Playwright 报
   `EPERM mkdtemp`）；把 `TEMP`/`TMP` 指向工作区即可（实测 0.07s）
 - **Playwright 版本与浏览器构建必须匹配**：`uv pip install playwright` 装到
