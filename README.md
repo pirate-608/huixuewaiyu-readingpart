@@ -347,6 +347,7 @@ python scripts/doctor.py
 | [`DISTRIBUTION.md`](DISTRIBUTION.md) | 开发 agent | 三平台分发与注册方式 | ❌ |
 | [`SETUP_DESIGN.md`](SETUP_DESIGN.md) | 开发 agent | 一键配置流程的设计依据 | ❌ |
 | [`archive/README.md`](archive/README.md) | 开发 agent | 归档了什么、为什么 | ❌ |
+| [`SECURITY.md`](SECURITY.md) | 所有人 | 一次历史重写的说明、隐私约定 | ❌（仓库页可见） |
 
 ## License
 
