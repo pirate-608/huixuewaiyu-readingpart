@@ -3297,3 +3297,82 @@ skill payload 里还带着 `scripts/` 和 `references/`，这与新 SKILL.md
 ```
 627adbf  docs: bring the agent-facing docs in line with what the code actually does
 ```
+
+---
+
+## 43. ✅ 两种 agent 的文档分工（约定 + 强制）
+
+用户要求区分：**开发 agent**（开发调试本项目）与**执行 agent**（跑 skill 答题），
+文档不要搞混。
+
+### 43.1 之前的混法（真实问题，不是理论）
+
+`elang install-skill` 把下面这些**一股脑复制进执行 agent 的 skill 目录**：
+
+- `CLAUDE.md`（开发指南）
+- `MIGRATION_CHECKPOINT.md`（**2355 行**实测日志）
+- `MCP_DESIGN.md`（设计记录）
+- `DISTRIBUTION.md`（分发设计）
+
+而 `SKILL.md` 本身也混着开发内容：站点组件表、Vue 序列化陷阱、
+"改代码前读 MIGRATION_CHECKPOINT"。
+
+### 43.2 约定
+
+| 角色 | 用途 | 文档 | 随 skill 分发 |
+|---|---|---|---|
+| **执行 agent** | 跑 skill 答题 | `SKILL.md`、`SETUP.md`、`.env.example`、`README.md` | ✅ |
+| **开发 agent** | 开发 / 调试本项目 | `CLAUDE.md`、`MIGRATION_CHECKPOINT.md`、`MCP_DESIGN.md`、`DISTRIBUTION.md`、`SETUP_DESIGN.md`、`archive/` | ❌ |
+
+**规则**：
+
+1. 每份文档开头都有 `> **读者：…**` 横幅
+2. `SKILL.md` **只讲怎么用**，实现细节一律在 `CLAUDE.md`
+3. 开发文档**不发货**
+4. 往 payload 加文件前先问：**执行 agent 需要它吗？**
+
+### 43.3 具体改动
+
+- `SKILL.md`：删掉站点组件表、Vue 陷阱、"读检查点"指令；
+  改为一段「工具内部做了什么（你不需要操作页面）」的行为概要。
+  对 `CLAUDE.md` 的引用改成**绝对 URL** —— `SKILL.md` 单独分发，相对链接会失效
+- `README.md`：新增角色表 + 带「随 skill 分发」列的文档地图
+- `install_skill.py` PAYLOAD 与 `pyproject.toml` 的 `elang/share/`：
+  都收敛为**四份执行侧文件**
+- `.env.example`：加读者横幅与凭据解析顺序说明
+
+### 43.4 ✅ 用测试把约定锁死
+
+新增 `scripts/test_doc_roles.py`（**33 项**），检查：
+
+- payload ⊆ 执行侧文档；**没有任何开发文档**；不含 `scripts/references/archive`
+- payload 每一项都能从 wheel 里解析到（不会出现 `missing`）
+- `share/` 与 payload 完全一致
+- 每份文档都声明了读者
+- 横幅指向的角色正确（执行侧说"执行 agent"，开发侧说"开发 agent"）
+- `SKILL.md` 没有指向开发文档的**相对**链接
+- `SKILL.md` 不含 DOM/Vue 内部细节（`PcReadPraxis` / `PcReadLearn` /
+  `PcReadIndex` / `__elangPraxisVm`）
+
+**以后再往 payload 里塞文件，测试会直接失败**，而不是悄悄污染已安装的 skill。
+
+### 43.5 ✅ 验证
+
+从 wheel 安装后执行 `elang install-skill`：
+
+```
+文件: .env.example, README.md, SETUP.md, SKILL.md
+SKILL.md 269 行
+有「读者：执行 agent」 : True
+有 DOM/Vue 内部细节    : False
+有 MIGRATION_CHECKPOINT : False
+有 elang pending        : True
+```
+
+回归：doc_roles 33/33、answer_ipc 20/20、answer_bank 全过、setup_mcp 33/33、MCP 往返通过。
+
+### 43.6 提交
+
+```
+cef19eb  docs: split the documentation by audience — 执行 agent vs 开发 agent
+```
