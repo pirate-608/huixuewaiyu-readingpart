@@ -181,6 +181,11 @@ def write_env_template(path=None, force=False):
     target.write_text(
         "# 慧学外语 CAS 凭据\n"
         "# 这个文件属于工作区，请勿提交到版本库。\n"
+        "#\n"
+        "# 键名两套都认（带 ELANG_ 前缀的优先）：\n"
+        "#     ELANG_CAS_USERNAME / CAS_USERNAME\n"
+        "#     ELANG_CAS_PASSWORD / CAS_PASSWORD\n"
+        "# 真实环境变量优先于本文件 —— 两套键名都适用。\n"
         "CAS_USERNAME=你的学号\n"
         "CAS_PASSWORD=你的密码\n",
         encoding="utf-8",

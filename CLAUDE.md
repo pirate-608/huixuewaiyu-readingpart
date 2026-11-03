@@ -83,10 +83,14 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 解析顺序，**全项目只此一处实现**：
 
 ```
-1. $ELANG_ENV_FILE              显式指定
-2. <cwd>/.env                   工作区根 ← 约定
-3. ~/.elang/.env                兜底
-   另外：ELANG_CAS_USERNAME / ELANG_CAS_PASSWORD 环境变量优先于以上任何文件
+1. $ELANG_ENV_FILE                     显式指定
+2. <工作目录>/.env                      工作区根 ← 约定
+3. ~/.elang/.env                       兜底
+
+键名两套都认（带 ELANG_ 前缀的优先）：
+    ELANG_CAS_USERNAME  /  CAS_USERNAME
+    ELANG_CAS_PASSWORD  /  CAS_PASSWORD
+真实环境变量优先于以上任何文件 —— 两套键名都适用。
 ```
 
 **为什么 `./.env` 就够**：所有 agent（DSH / Claude Code / Codex）运行命令时

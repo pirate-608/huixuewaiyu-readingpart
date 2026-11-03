@@ -108,7 +108,11 @@ elang doctor
 1. $ELANG_ENV_FILE                     显式指定
 2. <工作目录>/.env                      工作区根 ← 约定
 3. ~/.elang/.env                       兜底
-   另外：ELANG_CAS_USERNAME / ELANG_CAS_PASSWORD 环境变量优先于以上任何文件
+
+键名两套都认（带 ELANG_ 前缀的优先）：
+    ELANG_CAS_USERNAME  /  CAS_USERNAME
+    ELANG_CAS_PASSWORD  /  CAS_PASSWORD
+真实环境变量优先于以上任何文件 —— 两套键名都适用。
 ```
 
 `doctor` 会显示**实际读取的文件**和每个值的来源。若显示 `fallback` 而不是

@@ -213,7 +213,11 @@ elang continue / stop    # 每 50 篇的断点
 1. $ELANG_ENV_FILE                     显式指定路径
 2. <工作目录>/.env                      工作区根 ← 约定位置
 3. ~/.elang/.env                       兜底
-   —— 另外：ELANG_CAS_USERNAME / ELANG_CAS_PASSWORD 环境变量优先于以上任何文件
+
+键名两套都认（带 ELANG_ 前缀的优先）：
+    ELANG_CAS_USERNAME  /  CAS_USERNAME
+    ELANG_CAS_PASSWORD  /  CAS_PASSWORD
+真实环境变量优先于以上任何文件 —— 两套键名都适用。
 ```
 
 **为什么是「工作目录」**：所有 agent（DSH / Claude Code / Codex）运行命令时，
@@ -222,6 +226,10 @@ elang continue / stop    # 每 50 篇的断点
 
 **为什么环境变量优先**：MCP 宿主可以在启动工具时注入凭据，
 且陈旧的 `.env` 不应覆盖宿主给的值。
+
+**为什么有两套键名**：`.env` 里用裸名 `CAS_USERNAME` —— 简短，且兼容本项目
+早期的配置；环境变量里用带前缀的 `ELANG_CAS_USERNAME` —— 避免和其他同样使用
+`CAS_*` 的工具撞车。**两个来源都接受两种写法**，只是同时存在时带前缀的优先。
 
 > 注意：`elang doctor` 会显示**实际读取的文件**和每个值的来源
 > （`from file:CAS_USERNAME` 或 `from environment`）。

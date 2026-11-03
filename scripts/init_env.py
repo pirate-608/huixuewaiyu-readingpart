@@ -43,6 +43,8 @@ def main():
         print("Fill in your ZJU CAS credentials:")
         print("  CAS_USERNAME=<学号>")
         print("  CAS_PASSWORD=<密码>")
+        print("  (also accepted: ELANG_CAS_USERNAME / ELANG_CAS_PASSWORD;")
+        print("   when both are present the prefixed one wins)")
         print()
         print("This file stays local and should not be committed.")
     else:

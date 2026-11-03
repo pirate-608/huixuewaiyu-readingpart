@@ -22,10 +22,14 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 **1. 凭据放工作区根目录的 `.env`**
 
 ```
-1. $ELANG_ENV_FILE       显式指定
-2. <工作目录>/.env         工作区根 ← 约定位置
-3. ~/.elang/.env         兜底
-   —— 环境变量 ELANG_CAS_USERNAME / ELANG_CAS_PASSWORD 优先于以上任何文件
+1. $ELANG_ENV_FILE                     显式指定
+2. <工作目录>/.env                      工作区根 ← 约定
+3. ~/.elang/.env                       兜底
+
+键名两套都认（带 ELANG_ 前缀的优先）：
+    ELANG_CAS_USERNAME  /  CAS_USERNAME
+    ELANG_CAS_PASSWORD  /  CAS_PASSWORD
+真实环境变量优先于以上任何文件 —— 两套键名都适用。
 ```
 
 所有 agent 运行命令时的工作目录都是工作区根，所以 `./.env` 天然正确。
