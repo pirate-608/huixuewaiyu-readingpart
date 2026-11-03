@@ -276,7 +276,7 @@ CAS 回调 `#/authLogin?code=...` 期间页面是空的，此时查选择器必�
 **`temp/inspect_live.py`** —— 只读侦察器，编译通过，**不会点答案、不会交卷**。
 
 ```bash
-PY="C:/Users/<user>/.claude/skills/huixuewaiyu-readingpart/.venv/Scripts/python.exe"
+PY="~/.claude/skills/huixuewaiyu-readingpart/.venv/Scripts/python.exe"
 
 $PY temp/inspect_live.py login
 #   → 登录 + 抓完整路由表 + 组件表面
@@ -341,7 +341,7 @@ temp/inspect/20260926-120930-after-login   ← 最完整，含 148 条路由表
 | 仓库 | `<repo>` |
 | HEAD | `c34590d`（工作区干净） |
 | venv 解释器 | `~/.claude/skills/huixuewaiyu-readingpart/.venv/Scripts/python.exe` |
-| 凭据 | `~/.claude/skills/huixuewaiyu-readingpart/.env`（学号 `<sid>`） |
+| 凭据 | `~/.claude/skills/huixuewaiyu-readingpart/.env`（学号 `<已隐去>`） |
 | 安装的 skill 副本 | `~/.claude/skills/huixuewaiyu-readingpart/`，脚本与 HEAD 一致 |
 | 站点可达性 | 仅校园网可达（`elang.zju.edu.cn` → 内网 IP `10.202.160.113`） |
 | 普通 TLS 栈 | **连不上**（`Invoke-WebRequest` / `curl` 均失败），只能靠浏览器 |
@@ -2012,7 +2012,7 @@ python scripts/test_mcp_e2e.py --browser              # 端到端验证
 JSONDecodeError: Invalid \escape: line 4 column 21
 ```
 
-因为 `<repo>\...` 里的 `\p` 不是合法 JSON 转义。
+因为 `D:\<repo>\...` 里的 `\p` 不是合法 JSON 转义。
 
 **修复**：把模板 **parse 成对象**，改字段，再 `json.dumps` 重新序列化 ——
 让 json 自己处理转义。**永远不要手工往 JSON 文本里拼 Windows 路径。**
@@ -2042,7 +2042,7 @@ TEMP = <workspace>\temp\pwtmp                       → 0.07s 完成
 TEMP 修好后紧接着撞上：
 
 ```
-CreateFile C:\Users\<user>\.elang\browser-profile\Crashpad\settings.dat: 拒绝访问 (0x5)
+CreateFile %USERPROFILE%\.elang\browser-profile\Crashpad\settings.dat: 拒绝访问 (0x5)
 Lock file can not be created! Error code: 5
 ```
 
@@ -2096,9 +2096,9 @@ Lock file can not be created! Error code: 5
 
 ```
 mcp 1.29.0 于 2026-07-30 13:08:53 装在
-  C:\Users\<user>\AppData\Roaming\Python\Python314\site-packages   <- per-user，非系统目录
+  %APPDATA%\Python\Python314\site-packages   <- per-user，非系统目录
 playwright 1.60.0 于 2026-06-10 装在
-  C:\Python314\Lib\site-packages
+  <系统 Python>\Lib\site-packages
 ```
 
 - `mcp` 的安装时间**早于本次会话**，是用户本来就有的
@@ -2797,8 +2797,8 @@ Chromium is not installed for this tool.
 
 ```
 -- browser --
-  private cache: C:\Users\<user>\.elang\browsers  (absent)
-  shared cache : C:\Users\<user>\AppData\Local\ms-playwright  (present)
+  private cache: %USERPROFILE%\.elang\browsers  (absent)
+  shared cache : %LOCALAPPDATA%\ms-playwright  (present)
   usable       : True
   executable  : ...\ms-playwright\chromium-1223\chrome-win64\chrome.exe
   launch      : ok

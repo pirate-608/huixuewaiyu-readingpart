@@ -190,6 +190,9 @@ def write_env_template(path=None, force=False):
         "CAS_PASSWORD=你的密码\n",
         encoding="utf-8",
     )
+    # The file holds the CAS password in plaintext; keep it owner-only where the
+    # platform allows it (POSIX). Windows has no chmod equivalent.
+    restrict_to_owner(target)
     return target, True
 
 
@@ -201,6 +204,29 @@ def write_env_template(path=None, force=False):
 # chromium (1217 and 1223, each with full + headless-shell builds), and every
 # other Playwright user on the machine reads and writes the same directory.
 BROWSERS_DIR = Path.home() / ".elang" / "browsers"
+
+# The saved browser session holds cookies (including the CAS session cookie) and the
+# app's `authorization` JWT in plaintext. That is login state, not the CAS password,
+# but it still lets anyone holding the file act as the user until it expires — so it
+# must NOT sit in a world-readable temp directory. Keep it next to the browser
+# profile, in the user's own home, and tighten permissions on write.
+SESSION_FILE = Path.home() / ".elang" / "session.json"
+# Where it used to live (IPC temp dir); still read so an existing login is not lost.
+LEGACY_SESSION_NAME = "elang_session.json"
+
+
+def restrict_to_owner(path):
+    """Best-effort: make a file readable only by its owner.
+
+    POSIX honours 0o600. Windows has no chmod equivalent (it only toggles the
+    read-only bit), so this is a no-op there — the protection there comes from the
+    file living inside the user's own profile directory.
+    """
+    try:
+        if os.name != "nt":
+            os.chmod(path, 0o600)
+    except Exception:
+        pass
 
 
 def shared_browsers_dir():

@@ -165,6 +165,10 @@ def _ensure_credentials(prompt_ok=True):
         _env_path.parent.mkdir(parents=True, exist_ok=True)
         _env_path.write_text(f"CAS_USERNAME={_uid}\nCAS_PASSWORD={_pwd}\n",
                              encoding="utf-8")
+        try:
+            _config.restrict_to_owner(_env_path)   # owner-only: it holds a password
+        except Exception:
+            pass
     except Exception as e:
         print(f"ERROR: could not write {_env_path}: {type(e).__name__}: {e}")
         return False
@@ -172,6 +176,21 @@ def _ensure_credentials(prompt_ok=True):
     CAS_USERNAME, CAS_PASSWORD = _uid, _pwd
     _ENV_LOADED = True
     return True
+
+
+def _mask_id(value):
+    """Mask an identifier for logging: keep a short prefix, hide the rest.
+
+    Student ids are personal data and a public log is a bad place for them. Three
+    leading digits are enough to tell "same account as last time" while making the
+    value useless to anyone else.
+    """
+    v = str(value or "")
+    if not v:
+        return ""
+    if len(v) <= 4:
+        return "*" * len(v)
+    return v[:3] + "*" * (len(v) - 3)
 
 
 CAS_USERNAME = os.getenv("ELANG_CAS_USERNAME", "") or os.getenv("CAS_USERNAME", "")
@@ -480,7 +499,14 @@ CAPTCHA_PROMPT = ("Read the 4 characters in the CAPTCHA image at {img} and write
 # `authorization` (JWT). That is enough to skip CAS on later runs — which both
 # saves time and avoids hammering the CAS endpoint (repeated logins appear to be
 # what got us rate-limited before).
-SESSION_FILE = str(_IPC_ROOT / "elang_session.json")
+# The saved session holds the CAS session cookie and the app's `authorization` JWT in
+# plaintext. That is login state, not the CAS password, but anyone holding the file
+# could act as the user until it expires — so it lives in the user's profile directory
+# (config.SESSION_FILE), NOT in the shared IPC temp dir. The legacy location is still
+# read so upgrading does not force a re-login; writes go only to the private path.
+SESSION_FILE = str(getattr(_config, "SESSION_FILE",
+                           Path.home() / ".elang" / "session.json"))
+LEGACY_SESSION_FILE = str(_IPC_ROOT / "elang_session.json")
 SESSION_MAX_AGE = 7 * 24 * 3600  # seconds; a stale token just falls back to CAS
 
 # Persistent browser profile, kept in the user's home (NOT in the IPC dir, which
@@ -524,15 +550,20 @@ async def save_session(page):
                 "secure", "sameSite"}
         data["cookies"] = [{k: v for k, v in c.items() if k in keep}
                            for c in cookies]
-        Path(_IPC_ROOT).mkdir(parents=True, exist_ok=True)
-        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+        _session_path = Path(SESSION_FILE)
+        _session_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(_session_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            _config.restrict_to_owner(_session_path)
+        except Exception:
+            pass
         sid = ""
         try:
             sid = str(json.loads(data["user"]).get("sid", ""))
         except Exception:
             pass
-        print(f"[elang] session saved (sid={sid or '?'}, "
+        print(f"[elang] session saved (sid={_mask_id(sid) or '?'}, "
               f"{len(data['cookies'])} cookies) -> {SESSION_FILE}")
         return True
     except Exception as e:
@@ -563,10 +594,13 @@ def load_session():
     makes the app come up "logged in" while its API calls return 401 — the page
     then sits on 加载中 and looks like a scraper bug rather than a stale token.
     """
-    if not os.path.exists(SESSION_FILE):
+    _path = SESSION_FILE
+    if not os.path.exists(_path):
+        _path = LEGACY_SESSION_FILE
+    if not os.path.exists(_path):
         return None
     try:
-        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+        with open(_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception:
         return None
@@ -646,7 +680,7 @@ async def navigate_to(page, url):
 
     if "elang.zju.edu.cn" not in page.url:
         if CAS_USERNAME and CAS_PASSWORD:
-            print(f"[elang] CAS auto-login as {CAS_USERNAME}...")
+            print(f"[elang] CAS auto-login as {_mask_id(CAS_USERNAME)}")
             try:
                 await page.wait_for_selector("#username", timeout=20000)
                 await page.locator("#username").fill(CAS_USERNAME)
@@ -2197,6 +2231,7 @@ async def session_is_live(page):
 def drop_session():
     """Discard the saved session so the next attempt does a clean CAS login."""
     _remove_file(SESSION_FILE)
+    _remove_file(LEGACY_SESSION_FILE)
 
 
 async def finish_login(page):
