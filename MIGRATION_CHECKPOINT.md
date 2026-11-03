@@ -3226,3 +3226,70 @@ elang skip / continue / stop
 ```
 e0457d0  feat(cli): make `elang run` a real fallback — the agent answers it
 ```
+
+---
+
+## 42. ✅ 文档对齐：不让答题 agent 读过时信息
+
+用户要求："更改这个 skill 的文档，不要让答题 agent 运行在过时的信息里。"
+
+`SKILL.md` 是 agent 的**契约**，读错就会走错路径。系统性审计后发现四类过时：
+
+### 42.1 四类过时内容
+
+| 类型 | 具体 |
+|---|---|
+| **旧布局** | 开头教 `$PY scripts/doctor.py`、定义 `.venv/Scripts/python.exe`、"若 .venv 不存在先跑 scripts/setup.py" —— 全是拆分前的形态。装成 tool 后既没有仓库也没有 `.venv` |
+| **自相矛盾** | L126 教 `elang answer`，L181 却写"**答案不再通过文件传递**" |
+| **名字错** | 写 `elang-mcp`；实际注册的 serverName 是 `elang`，工具是 `mcp__elang__*` |
+| **缺关键信息** | 完全没提答案库、`bank_answers`、`setup-mcp`、`install-skill` |
+
+### 42.2 SKILL.md 重写要点
+
+- 一切从 **`elang`** 开始，明确"不要找 `.venv`、不要用 `python scripts/...`"
+- 规则从三条扩到**四条**，新增"**先查题库，再自己答**"
+- MCP 段补上 `bank_answers`（命中直接提交，省掉整个模型往返）与 `bank_note`（近失原因）
+- CLI 段把答题循环写死：**只有 `elang run` 阻塞**，agent 用 `elang pending --brief`
+  轮询，**绝不要 `job_output(wait=true)`**
+- IPC 一节改为"答题确实走文件，但你不用手写 —— 用 `elang pending/answer`"
+- 补「安装」与「会话保持」（持久化 profile 不保留会话 cookie，重放是必需的）
+
+### 42.3 其余文档
+
+| 文件 | 修正 |
+|---|---|
+| `CLAUDE.md` | 组件表补 `answer_ipc.py` + 依赖方向图；命令段以 `elang` 为主，仓库路径降级为"开发"小节 |
+| `DISTRIBUTION.md` | `install-skill --agent/--scope` 取代旧 `--hosts` 调用；沙箱说明改用真实 server 名 |
+| `archive/README.md` | 原文称 IPC 协议"已退休、没有调用方"——**这正是 `elang run` 丢掉答题侧的原因**。改为：归档的是那个临时脚本，协议已恢复为一等命令 |
+| `MCP_DESIGN.md` | 加**状态头**：它是设计记录不是现状，"目标态（IPC 退休）"已被推翻 |
+| `SETUP.md` | `elang list` 的期望输出补上答题动词 |
+
+**`MIGRATION_CHECKPOINT.md` 不改** —— 它是带日期的历史记录，改它等于篡改结论。
+
+### 42.4 顺带修正架构不一致
+
+skill payload 里还带着 `scripts/` 和 `references/`，这与新 SKILL.md
+（明确说不要用 `python scripts/...`）矛盾，而且**装成 tool 后根本复制不出来**
+—— 每次安装都打印 `missing: scripts`，看起来像坏了。
+
+按"skill 只带文档契约"的原则精简为 **8 份文档**，`missing` 消失。
+
+### 42.5 ✅ 验证
+
+从 **git 安装**后检查包内 `SKILL.md`：
+
+```
+行数 272 / 含 elang pending / elang doctor / bank_answers
+不含 $PY / 不含"答案不再"
+唯一一处 `python scripts/` 是"不要用它"的警告句
+```
+
+注册到临时目录：8 份文档，无 `missing`。
+
+回归：answer_ipc 20/20、answer_bank 全过、setup_mcp 33/33、mcp 协议往返通过。
+
+### 42.6 提交
+
+```
+627adbf  docs: bring the agent-facing docs in line with what the code actually does
+```
