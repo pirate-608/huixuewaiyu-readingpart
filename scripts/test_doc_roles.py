@@ -64,18 +64,21 @@ check("share/ has only execution docs",
 check("share/ matches the payload",
       set(share) == payload_srcs, f"share={sorted(share)} payload={sorted(payload_srcs)}")
 
-print("\n=== every doc declares its audience ===")
-for name in sorted(EXEC_DOCS | DEV_DOCS):
+print("\n=== role-specific docs declare their audience ===")
+# A 读者 banner belongs on the documents whose audience could be confused: the two
+# skill-facing docs and the development-only ones. README is a general entry point
+# and .env.example is a template, so neither carries one.
+BANNERED = ({"SKILL.md", "SETUP.md"} | DEV_DOCS)
+for name in sorted(BANNERED):
     p = REPO / name
     if not p.exists():
         check(f"{name} exists", False)
         continue
     head = "\n".join(p.read_text(encoding="utf-8").splitlines()[:12])
-    # Markdown uses "> **读者：…**"; .env.example can only use a comment.
     check(f"{name} declares its audience", "读者" in head)
 
 print("\n=== banners point at the right role ===")
-for name in sorted(EXEC_DOCS - {"README.md", ".env.example"}):
+for name in sorted({"SKILL.md", "SETUP.md"}):
     head = "\n".join((REPO / name).read_text(encoding="utf-8").splitlines()[:12])
     check(f"{name} says 执行 agent", "执行 agent" in head,
           "found: " + next((l for l in head.splitlines() if "读者" in l), "?"))
@@ -83,6 +86,12 @@ for name in sorted(DEV_DOCS):
     head = "\n".join((REPO / name).read_text(encoding="utf-8").splitlines()[:12])
     check(f"{name} says 开发 agent", "开发 agent" in head,
           "found: " + next((l for l in head.splitlines() if "读者" in l), "?"))
+
+print("\n=== README stays a general entry point ===")
+readme = (REPO / "README.md").read_text(encoding="utf-8")
+check("README has no 读者 banner", "**读者" not in readme)
+check("README has no role-split section", "两种 agent" not in readme)
+check("README does not assign docs to agent roles", "开发 agent" not in readme)
 
 print("\n=== the execution contract carries no dev-only material ===")
 skill = (REPO / "SKILL.md").read_text(encoding="utf-8")

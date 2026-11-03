@@ -4,8 +4,8 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 ---
 
 > **读者：执行 agent**（用本 skill 答题）。
-> 开发/调试本项目的 agent 请看仓库 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md) —— 本文不含实现细节，
-> 也不解释怎么改代码。
+> 开发本项目的 agent 请参阅仓库中的 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md)。
+> 本文只说明使用方法，不包含实现细节。
 
 # 慧学外语阅读自动答题
 
@@ -13,7 +13,7 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 交由你（agent）作答，再用应用自己的方法提交。
 
 工具已经装好时，一切从 **`elang`** 命令开始。**不要再去找仓库里的 `.venv` 或
-用 `python scripts/...`** —— 那是开发布局，不是使用方式。
+用 `python scripts/...`。前者属于开发布局，不是使用方式。
 
 ---
 
@@ -29,7 +29,7 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 键名两套都认（带 ELANG_ 前缀的优先）：
     ELANG_CAS_USERNAME  /  CAS_USERNAME
     ELANG_CAS_PASSWORD  /  CAS_PASSWORD
-真实环境变量优先于以上任何文件 —— 两套键名都适用。
+真实环境变量优先于以上任何文件，两套键名都适用。
 ```
 
 所有 agent 运行命令时的工作目录都是工作区根，所以 `./.env` 天然正确。
@@ -45,13 +45,13 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 
 MCP 模式下**没有任何 tool 会等待**。
 CLI 模式下只有 `elang run` 自己阻塞（它本就是长任务），**你侧的命令全部立即返回**。
-绝不要用"挂着等 job 输出"的方式轮询 —— 那会让双方互相等待。
+不要以等待 job 输出的方式轮询，那会让双方互相等待。
 
 **4. 先查题库，再自己答**
 
 题库覆盖的文章会自动完成，不要重复劳动。
 MCP 的 `open_next` 命中时返回 `bank_answers`，直接拿去提交即可。
-CLI 命中时脚本自己就提交了，根本不会来问你。
+CLI 命中时由脚本直接提交，不会请求作答。
 
 ---
 
@@ -65,7 +65,7 @@ elang doctor
 
 | 输出 | 行动 |
 |---|---|
-| `elang: command not found` | 没装。见「安装」一节，或让用户先装 |
+| `elang: command not found` | 未安装。参见下文安装一节，或请用户先行安装 |
 | `browser ... FAILED` | `elang install-browser`（网络/TLS 报错直接重试） |
 | 报 `EPERM` / `mkdtemp` | 把 `TEMP`/`TMP` 指向可写目录再试（doctor 会提示） |
 | `env file ... (missing)` | `elang init-env` 生成模板，然后**让用户自己填密码** |
@@ -124,8 +124,8 @@ elang_stop
 
 **提交后必须检查返回的两个字段**：
 
-- `echo` —— 实际落进去的值
-- `incomplete` —— 没有回读为已答的题；**非空就说明没答全**
+- `echo`：实际写入的值
+- `incomplete`：未能回读为已答的题目，非空表示没有答全
 
 `open_next` 若返回 `bank_note`，那是"标题命中了题库但没采用"的原因
 （通常是题目数量与题库记录不一致），照常自己答。
@@ -139,14 +139,14 @@ elang run batch-all --subjects-only        # 只列主题，零风险
 elang run batch-all --limit 1 --dry-run    # 安全试跑
 ```
 
-**首次务必先 `--subjects-only` 或 `--limit 1 --dry-run`**，
+**首次使用应先执行 `--subjects-only` 或 `--limit 1 --dry-run`**，
 确认路径与登录都正常，再放开全量。
 
 #### 你（agent）就是答题方
 
 题库覆盖的文章脚本会自己提交，**剩下的需要你答**：它会写题目然后等待。
 
-**这一步最容易搞错**：`elang run` 在**它自己那个后台 job 里**阻塞是正常的；
+**此处容易出错**：`elang run` 在自身的后台任务中阻塞属于正常行为；
 **你不要等它的输出**。正确循环：
 
 ```
@@ -175,7 +175,7 @@ elang run batch-all --limit 1 --dry-run    # 安全试跑
 
 ## 阶段三：验证码
 
-验证码是**题目页的闸门** —— 题目只有通过验证码后才加载。处理顺序：
+验证码是题目页的前置条件，题目只有在通过验证码后才会加载。处理顺序如下：
 
 1. **ddddocr 自动识别**（最多 3 次；若图片没换就停止重试，避免死循环）
 2. **交接**：图片写到 `<ipc>/elang_captcha_image.png`，
@@ -189,7 +189,7 @@ elang run batch-all --limit 1 --dry-run    # 安全试跑
 
 MCP 模式下用 `elang_get_captcha` / `elang_solve_captcha`，逻辑相同。
 
-**如果 OCR 认不准，不要反复猜** —— 交接给用户，连续错会触发更多验证码。
+OCR 结果不确定时不要反复尝试，应交接给用户。连续出错会触发更多验证码。
 
 ---
 
@@ -206,7 +206,7 @@ MCP 模式下用 `elang_get_captcha` / `elang_solve_captcha`，逻辑相同。
 | `elang_checkpoint.json` | 断点：已完成主题与总数 |
 | `elang_current.json` / `elang_signal.json` | **仅 CLI 模式**：你与 `elang run` 之间的答题交接 |
 
-**CLI 模式的答题确实走文件**，但你不需要手写它们 —— 用 `elang pending` /
+**CLI 模式的答题通过文件传递**，但不需要手工写入，使用 `elang pending` /
 `elang answer` 即可（它们只是这两组文件的便捷封装）。
 
 ---
@@ -226,7 +226,7 @@ CAS 自动登录（.env 凭据）
 完成状态由应用自己的 `normalizeStatus` 判定，与界面显示一致。
 每篇做完会更新 `<ipc>/elang_checkpoint.json`。
 
-实现细节、站点组件名与 Vue 陷阱见仓库 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md) ——
+实现细节、站点组件名与 Vue 陷阱见仓库中的 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md)。
 那是**开发 agent** 的文档，不随 skill 分发。
 
 ## 安装（工具没装时）
@@ -253,7 +253,7 @@ elang install-skill --agent <dsh|codex|claude> --scope <global|project>
 - Chromium（`elang install-browser` 负责）
 - ZJU CAS 账号
 
-**不要**把依赖装进系统 Python，也不要用 `--system-site-packages` 借系统包 ——
+**不要**把依赖装进系统 Python，也不要用 `--system-site-packages` 借用系统包，
 那会让工具换台机器就失效。`elang doctor` 会检测并警告。
 
 ### 沙箱说明（实测）
@@ -268,6 +268,6 @@ Playwright **无法**在文件沙箱内启动浏览器：它的 driver 走
 
 ### 会话保持
 
-持久化 profile **本身不保留 CAS 会话** —— `iPlanetDirectoryPro` 与 zjuam 的
+持久化 profile **本身不保留 CAS 会话**。`iPlanetDirectoryPro` 与 zjuam 的
 `JSESSIONID` 是会话 cookie，会被丢弃。所以 `<ipc>/elang_session.json`
 的显式重放**是必需的，不是优化**。令牌有效期约 2 小时，工具会在到期前刷新。

@@ -1,84 +1,63 @@
 # 慧学外语阅读自动答题
 
-> **读者：人类用户**（也可被 agent 当作全景概览）。
-> 执行 agent 的契约是 [`SKILL.md`](SKILL.md)；开发 agent 看 [`CLAUDE.md`](CLAUDE.md)。
-
 Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.edu.cn)英语阅读练习。
 
-> **致谢** — 本项目基于开源项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 开发，感谢原作者 [shixu2026](https://gitee.com/shixu2026) 的贡献。
+> **致谢** 本项目基于开源项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 开发，感谢原作者 [shixu2026](https://gitee.com/shixu2026) 的贡献。
 
-## 两种 agent，两套文档
+## 交给 agent 完成安装
 
-本项目涉及两类 agent，**文档严格分开**，不要交叉使用：
-
-| 角色 | 是做什么的 | 该读什么 | 在仓库外能看到吗 |
-|---|---|---|---|
-| **执行 agent** | 跑本 skill **答题**的 agent | [`SKILL.md`](SKILL.md)（契约）、[`SETUP.md`](SETUP.md)（安装）、`.env.example` | ✅ 会随 skill 装进 agent 的 skill 目录 |
-| **开发 agent** | **开发 / 调试**本项目的 agent | [`CLAUDE.md`](CLAUDE.md)、[`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md)、[`MCP_DESIGN.md`](MCP_DESIGN.md)、[`DISTRIBUTION.md`](DISTRIBUTION.md)、[`SETUP_DESIGN.md`](SETUP_DESIGN.md)、[`archive/`](archive/README.md) | ❌ **不发货**，只在仓库里 |
-
-**约定**：
-
-- 每份文档开头都有一行「读者：…」，先看那行再决定要不要读
-- `SKILL.md` **只讲怎么用**，不含实现细节；实现细节在 `CLAUDE.md`
-- 开发文档**不会**被 `elang install-skill` 复制出去 —— 执行 agent 的 skill 目录里
-  只有契约与安装说明
-- 往 skill payload 里加文件前先问：**执行 agent 需要它吗？** 不需要就别加
-
-## 交给 agent 一句话搞定
-
-不用自己一步步装。把下面这句复制给 agent（DSH / Codex / Claude Code 都行）：
+把下面这句复制给 agent，DSH、Codex、Claude Code 均可：
 
 ```
 读 https://github.com/pirate-608/huixuewaiyu-readingpart 的 SETUP.md，
 按里面的步骤帮我装好这个工具。我是 <DSH / Codex / Claude Code> 用户。
 ```
 
-agent 会读完 [`SETUP.md`](SETUP.md) 里的约定，然后自己完成：装工具 → 装浏览器 →
-生成凭据模板（**密码由你自己填，agent 不读**）→ 注册 skill → 注册 MCP，
-每步都有验证，失败会报原始错误而不是跳过。
+agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板（密码由用户填写）、
+注册 skill、注册 MCP。每一步都有验证命令，失败时报告原始错误，不会跳过。
 
-想手动装的话看下面的[快速开始](#快速开始)。
+手动安装见[快速开始](#快速开始)。
 
 ## 特性
 
-- **CAS 自动登录** — 凭据放工作区 `.env`，无需手动登录
-- **验证码 OCR** — ddddocr 自动识别；识别不出时交接给视觉模型或人工
-- **断点续传** — 每个主题完成后保存进度
-- **已完成跳过** — 用应用自己的 `normalizeStatus` 判断，与界面一致
-- **零阻塞作答** — MCP 工具每步立即返回状态，不存在超时协商
-- **自我诊断** — `elang doctor` 报告环境/浏览器/凭据并给出修复命令
-- **跨平台** — Windows / Linux / macOS
+- **CAS 自动登录**：凭据存放在工作区 `.env`，无需手动登录
+- **验证码 OCR**：ddddocr 自动识别，识别失败时交接给视觉模型或人工
+- **断点续传**：每个主题完成后保存进度
+- **已完成跳过**：使用应用自身的 `normalizeStatus` 判断，与界面显示一致
+- **零阻塞作答**：MCP 工具每步立即返回状态，不需要超时协商
+- **自我诊断**：`elang doctor` 报告环境、浏览器与凭据状态，并给出修复命令
+- **跨平台**：Windows / Linux / macOS
 
 ## 三个独立产物
 
 | 产物 | 安装方式 | 职责 |
 |---|---|---|
-| **工具** | `uv tool install` | MCP server + 求解器。自带隔离环境，提供 `elang` 命令 |
-| **skill** | `elang install-skill` | **只有文档与契约** —— 告诉 agent 该跑什么命令 |
-| **本仓库** | `git clone` | 承载两者；开发用，也可脱离工具独立运行 |
+| **工具** | `uv tool install` | MCP server 与求解器，自带隔离环境，提供 `elang` 命令 |
+| **skill** | `elang install-skill` | 文档与契约，说明 agent 应执行哪些命令 |
+| **本仓库** | `git clone` | 承载上述两者，也可脱离工具独立运行 |
 
-工具的依赖装在 **uv 自己的隔离环境**里，**不碰系统 Python**。
+工具依赖安装在 uv 自身的隔离环境中，不写入系统 Python。
 
 ---
 
 ## 快速开始
 
-### 1. 装工具
+### 1. 安装工具
 
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
-### 2. 装浏览器
+### 2. 安装浏览器
 
-`uv tool install` 只建 Python 环境，**不装浏览器二进制**，所以这一步是分开的：
+`uv tool install` 只建立 Python 环境，不安装浏览器二进制，因此这一步单独执行：
 
 ```bash
 elang install-browser
 ```
 
-它会先检查是否已有可用构建，**有就什么都不做**；缺失时装到工具的私有缓存
-（`~/.elang/browsers`）。用 `--shared` 可装到 Playwright 的共享缓存。
+该命令先检查是否已有可用构建，存在则不做任何操作；缺失时安装到工具的私有缓存
+（`~/.elang/browsers`）。使用 `--shared` 可安装到 Playwright 的共享缓存。
 
 ### 3. 配置凭据
 
@@ -86,14 +65,14 @@ elang install-browser
 elang init-env      # 在工作区根生成 .env 模板
 ```
 
-然后在 `.env` 里填写：
+然后在 `.env` 中填写：
 
 ```
 CAS_USERNAME=你的学号
 CAS_PASSWORD=你的密码
 ```
 
-凭据仅本地存储，不会上传。
+凭据仅存储于本地，不会上传。
 
 ### 4. 确认环境
 
@@ -101,32 +80,30 @@ CAS_PASSWORD=你的密码
 elang doctor
 ```
 
-它会报告依赖、浏览器、凭据的实际状态，并**打印需要执行的命令**。
-输出末尾出现 `All good.` 即可开始使用。
+该命令报告依赖、浏览器与凭据的实际状态。输出末尾为 `All good.` 时可以开始使用。
 
 ### 5. 注册 skill（可选）
-
-想让 agent 直接使用：
 
 ```bash
 elang install-skill                                   # 全局，所有检测到的 agent
 elang install-skill --agent claude                    # 只装 Claude Code
 elang install-skill --agent dsh,codex --scope project # 装进当前项目
-elang install-skill --scope all                       # 全局 + 项目
+elang install-skill --scope all                       # 全局与项目都装
 elang install-skill --check                           # 只看状态
 elang install-skill --uninstall --agent claude
 ```
 
-**`--agent`**：`dsh` / `codex` / `claude`（逗号分隔，默认所有检测到的）。
-注意 **DSH 与 Codex 共享 `~/.agents/skills`**，所以给两者安装只写一个目录。
+`--agent` 取值为 `dsh`、`codex`、`claude`，逗号分隔，默认为所有检测到的宿主。
+DSH 与 Codex 共享 `~/.agents/skills`，因此给两者安装只写一个目录。
 
-**`--scope`**：
-- `global`（默认）—— 所有项目可用，不在你的仓库里留下任何东西
-- `project` —— 装在项目内，**优先级高于全局**（DSH 把项目根排在 100/200，
-  全局排在 400/500）；因为位于项目内，**可以提交**给协作者
-- `all` —— 两者都装
+`--scope` 取值：
 
-项目根取当前目录最近的含 `.git` / `pyproject.toml` / `SKILL.md` 的祖先目录，
+- `global`（默认）：所有项目可用，不在仓库中留下文件
+- `project`：安装在项目内，优先级高于全局（DSH 将项目根排在 100/200，全局排在 400/500）。
+  由于位于项目内，可以提交给协作者
+- `all`：两者都装
+
+项目根取当前目录最近的、包含 `.git`、`pyproject.toml` 或 `SKILL.md` 的祖先目录，
 也可用 `--project-root` 指定。
 
 ---
@@ -135,14 +112,14 @@ elang install-skill --uninstall --agent claude
 
 ### 作为 skill
 
-在 agent 里说「慧学外语刷题」或 `/huixuewaiyu-readingpart`。
+在 agent 中说明需求，例如完成慧学外语的阅读题。
 
 ### 通过 MCP
 
-生成注册文件（含各宿主说明）：
+生成注册配置：
 
 ```bash
-elang setup-mcp
+elang setup-mcp --host <claude|dsh|codex>
 ```
 
 工具以 `mcp__elang__*` 出现：
@@ -151,19 +128,19 @@ elang setup-mcp
 elang_start          打开浏览器并登录
 elang_status         查看状态（不会启动浏览器）
 elang_list_subjects  主题列表
-elang_open_next      推进到下一篇 → 返回正文与题目
+elang_open_next      推进到下一篇，返回正文与题目
 elang_submit_answers 提交答案
-elang_get_captcha / elang_solve_captcha
+elang_get_captcha    获取验证码图片
+elang_solve_captcha  提交验证码
 elang_skip_article   原样提交
 elang_stop           关闭
 ```
 
-**没有任何工具会阻塞等待** —— 每步立即返回当前状态与可执行的下一步，
-所以不需要超时协商。
+所有工具都会立即返回当前状态与可执行的下一步，不存在阻塞等待，因此不需要超时协商。
 
-作答格式是 `[[qIndex, value], ...]`：选择题给 0 起的选项序号；
-**填空题给数组，每个空一个值**，长度必须等于空格数。提交后返回里含
-`incomplete`，**请检查它** —— 列出没有回读为已答的题。
+作答格式为 `[[qIndex, value], ...]`。选择题的 `value` 是从 0 开始的选项序号；
+填空题的 `value` 是数组，每个空对应一个值，长度需与空格数一致。提交后的返回包含
+`incomplete` 字段，列出未能回读为已答的题目，需要检查。
 
 ### 命令行
 
@@ -171,74 +148,75 @@ elang_stop           关闭
 elang run batch-all                              # 全部主题（220 篇）
 elang run batch 26                               # 单个主题
 elang run solve "<praxis-url>"                   # 单篇
-elang run batch-all --subjects-only              # 只列主题，零风险
+elang run batch-all --subjects-only              # 只列主题，不做改动
 elang run batch-all --limit 1 --dry-run          # 安全试跑
 ```
 
-**首次务必先 `--subjects-only` 或 `--limit 1 --dry-run`**，确认路径与登录正常再放开全量。
+首次使用建议先执行 `--subjects-only` 或 `--limit 1 --dry-run`，确认路径与登录正常
+后再放开全量。
 
-`elang run` 遇到题库没覆盖的文章时会停下来等作答。**答题方是你（agent）**：
+`elang run` 遇到题库未覆盖的文章时会暂停等待作答，此时由 agent 提供答案：
 
 ```bash
-elang pending            # 看题目（立即返回；--brief 只看摘要）
-elang answer 0=A 1=C     # 选择题给字母；填空题每空一个值："5=A,B,C"
+elang pending            # 查看题目，立即返回；--brief 只输出摘要
+elang answer 0=A 1=C     # 选择题给字母；填空题每空一个值，例如 "5=A,B,C"
 elang skip               # 原样提交
-elang continue / stop    # 每 50 篇的断点
+elang continue           # 继续（每 50 篇的断点）
+elang stop               # 停止
 ```
 
-`elang run` 挂在自己那个后台 job 里等待，**你这边不要等它输出** ——
-用 `elang pending --brief` 轮询，它是非阻塞的。
+`elang run` 会在后台等待。该进程的输出不需要等待，使用 `elang pending --brief`
+轮询即可，该命令会立即返回。
 
 ### 其他命令
 
 | 命令 | 作用 |
 |---|---|
-| `elang doctor` | 环境 / 浏览器 / 凭据报告 |
+| `elang doctor` | 报告环境、浏览器与凭据状态 |
 | `elang init-env` | 生成 `.env` 模板 |
 | `elang install-browser` | 安装 Chromium |
 | `elang install-skill` | 注册 skill |
-| `elang setup-mcp` | 注册 MCP（`--host claude|dsh|codex`） |
+| `elang setup-mcp` | 注册 MCP，`--host` 取 `claude`、`dsh` 或 `codex` |
 | `elang pending` | 显示 `elang run` 正在等待的文章 |
-| `elang answer 0=A 1=C` | 作答（`elang run` 的答题侧） |
-| `elang skip` / `continue` / `stop` | 配合 `elang run` 的控制动词 |
+| `elang answer 0=A 1=C` | 为待答文章提供答案 |
+| `elang skip` / `continue` / `stop` | 配合 `elang run` 的控制命令 |
 | `elang list` | 列出全部子命令 |
 
 ---
 
-## 凭据在哪
+## 凭据
 
-全项目只有一处实现（`scripts/config.py`）：
+凭据解析只有一处实现（`scripts/config.py`），顺序如下：
 
 ```
 1. $ELANG_ENV_FILE                     显式指定路径
-2. <工作目录>/.env                      工作区根 ← 约定位置
+2. <工作目录>/.env                      工作区根，约定位置
 3. ~/.elang/.env                       兜底
 
-键名两套都认（带 ELANG_ 前缀的优先）：
+键名两套都接受，带 ELANG_ 前缀的优先：
     ELANG_CAS_USERNAME  /  CAS_USERNAME
     ELANG_CAS_PASSWORD  /  CAS_PASSWORD
-真实环境变量优先于以上任何文件 —— 两套键名都适用。
+真实环境变量优先于以上任何文件，两套键名都适用。
 ```
 
-**为什么是「工作目录」**：所有 agent（DSH / Claude Code / Codex）运行命令时，
-工作目录都是工作区根 —— 这是它们的共同契约。所以 `./.env` 天然正确，
-**不需要任何 agent 特定逻辑**。
+使用工作目录作为锚点，是因为各 agent（DSH、Claude Code、Codex）执行命令时工作目录
+都是工作区根。因此 `./.env` 始终是正确位置，不需要额外的探测逻辑。
 
-**为什么环境变量优先**：MCP 宿主可以在启动工具时注入凭据，
-且陈旧的 `.env` 不应覆盖宿主给的值。
+环境变量优先于文件，是因为 MCP 宿主可以在启动工具时注入凭据，而陈旧的 `.env`
+不应覆盖宿主提供的值。
 
-**为什么有两套键名**：`.env` 里用裸名 `CAS_USERNAME` —— 简短，且兼容本项目
-早期的配置；环境变量里用带前缀的 `ELANG_CAS_USERNAME` —— 避免和其他同样使用
-`CAS_*` 的工具撞车。**两个来源都接受两种写法**，只是同时存在时带前缀的优先。
+键名有两套的原因：`.env` 中使用裸名 `CAS_USERNAME`，写法简短，且兼容本项目早期的
+配置；环境变量中使用带前缀的 `ELANG_CAS_USERNAME`，避免与其他同样使用 `CAS_`
+前缀的工具冲突。两个来源都接受两种写法，同时存在时带前缀的优先。
 
-> 注意：`elang doctor` 会显示**实际读取的文件**和每个值的来源
-> （`from file:CAS_USERNAME` 或 `from environment`）。
+`elang doctor` 会显示实际读取的文件，以及每个值的来源
+（`from file:CAS_USERNAME` 或 `from environment`）。
 
 ---
 
 ## 覆盖主题
 
-索引页 `#/pc/read/index` 给出 11 个主题，共 **220 篇**：
+索引页 `#/pc/read/index` 给出 11 个主题，共 220 篇：
 
 | subject_id | 主题 | 文章数 |
 |---|---|---|
@@ -280,44 +258,44 @@ CAS 自动登录（.env 凭据）
 huixuewaiyu-readingpart/
 ├── pyproject.toml              # 打包配置（hatchling）
 ├── README.md                   # 本文件
-├── SKILL.md                    # skill 契约（三平台共用）
-├── CLAUDE.md                   # 面向 agent 的项目指引
+├── SKILL.md                    # skill 契约，三平台共用
+├── CLAUDE.md                   # 开发指引
 ├── .env.example                # 凭据模板
-├── .mcp.json.example           # MCP 注册模板（实际文件由 setup-mcp 生成）
+├── .mcp.json.example           # MCP 注册模板，实际文件由 setup-mcp 生成
 ├── requirements.txt
 ├── src/elang/
 │   ├── __init__.py             # 让平铺模块在两种布局下都能按裸名导入
 │   └── cli.py                  # elang 命令的唯一入口
-├── scripts/                    # 实现真源（构建时打进 wheel）
-│   ├── config.py               # 凭据解析（全项目唯一实现）
-│   ├── doctor.py               # 环境/浏览器/凭据诊断
+├── scripts/                    # 实现源，构建时打进 wheel
+│   ├── config.py               # 凭据解析，全项目唯一实现
+│   ├── doctor.py               # 环境、浏览器与凭据诊断
 │   ├── init_env.py             # 生成 .env 模板
 │   ├── install_browser.py      # 安装 Chromium
 │   ├── install_skill.py        # 注册到各 agent 根目录
-│   ├── setup_mcp.py            # 生成 .mcp.json
-│   ├── elang_reader.py         # 浏览器自动化核心 + 批处理 CLI
-│   ├── elang_session.py        # 显式状态机（零阻塞）
-│   ├── elang_mcp.py            # MCP server（10 个 tool）
+│   ├── setup_mcp.py            # 生成 MCP 注册
+│   ├── elang_reader.py         # 浏览器自动化核心与批处理 CLI
+│   ├── elang_session.py        # 显式状态机，零阻塞
+│   ├── elang_mcp.py            # MCP server，10 个工具
 │   └── setup.py                # 克隆本仓库后的一键安装
-├── references/                 # 题库（answers.json 同时打进 wheel）
-└── archive/                    # 已过时的实现与文档（见 archive/README.md）
+├── references/                 # 题库，answers.json 同时打进 wheel
+└── archive/                    # 已过时的实现与文档，见 archive/README.md
 ```
 
-### 从源码安装（开发）
+### 从源码安装
 
 ```bash
 git clone https://github.com/pirate-608/huixuewaiyu-readingpart.git
 cd huixuewaiyu-readingpart
-python scripts/setup.py          # 装工具 + 注册 skill + 报告状态
+python scripts/setup.py          # 装工具、注册 skill、报告状态
 ```
 
-首次克隆后建议启用提交钩子（仓库公开，防止误提交隐私）：
+首次克隆后建议启用提交钩子，用于阻断意外提交的隐私数据：
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-仓库也可以**脱离工具独立运行**：
+仓库也可以脱离工具独立运行：
 
 ```bash
 python scripts/elang_reader.py batch-all
@@ -327,33 +305,33 @@ python scripts/doctor.py
 ## 依赖
 
 - Python 3.11+
-- [`uv`](https://docs.astral.sh/uv/) —— 用于安装工具（推荐）
-- Chromium —— 由 `elang install-browser` 安装
+- [`uv`](https://docs.astral.sh/uv/)，用于安装工具（推荐）
+- Chromium，由 `elang install-browser` 安装
 - ZJU CAS 账号
 
-**不要**把依赖装进系统 Python，也不要用 `--system-site-packages` 借系统包 ——
-那会让工具换台机器就失效。`elang doctor` 会检测并警告这种情况。
+不要把依赖装进系统 Python，也不要用 `--system-site-packages` 借用系统包，
+否则工具换一台机器后会失效。`elang doctor` 会检测并警告这种情况。
 
 ## 注意事项
 
 - 运行期间请勿关闭浏览器窗口
-- 连续做若干篇后平台会弹验证码；OCR 失败时会交接给视觉模型或人工
-- 应用令牌有效期约 2 小时，长跑时会在到期前自动刷新
+- 连续做若干篇后平台会要求验证码，OCR 失败时交接给视觉模型或人工
+- 应用令牌有效期约 2 小时，长时间运行会在到期前自动刷新
 - 仅供学习用途，请合理使用
 
 ## 文档
 
-| 文件 | 读者 | 内容 | 随 skill 分发 |
-|---|---|---|---|
-| [`SKILL.md`](SKILL.md) | 执行 agent | 契约与操作流程 | ✅ |
-| [`SETUP.md`](SETUP.md) | 执行 agent | 安装与配置步骤 | ✅ |
-| [`CLAUDE.md`](CLAUDE.md) | 开发 agent | 架构、依赖方向、开发命令 | ❌ |
-| [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md) | 开发 agent | 实测事实、踩过的坑、被推翻的假设 | ❌ |
-| [`MCP_DESIGN.md`](MCP_DESIGN.md) | 开发 agent | MCP 化设计记录（见文首状态说明） | ❌ |
-| [`DISTRIBUTION.md`](DISTRIBUTION.md) | 开发 agent | 三平台分发与注册方式 | ❌ |
-| [`SETUP_DESIGN.md`](SETUP_DESIGN.md) | 开发 agent | 一键配置流程的设计依据 | ❌ |
-| [`archive/README.md`](archive/README.md) | 开发 agent | 归档了什么、为什么 | ❌ |
-| [`SECURITY.md`](SECURITY.md) | 所有人 | 一次历史重写的说明、隐私约定 | ❌（仓库页可见） |
+| 文件 | 内容 |
+|---|---|
+| [`SKILL.md`](SKILL.md) | skill 契约与操作流程 |
+| [`SETUP.md`](SETUP.md) | 安装与配置步骤 |
+| [`CLAUDE.md`](CLAUDE.md) | 架构、依赖方向与开发命令 |
+| [`SECURITY.md`](SECURITY.md) | 一次历史重写的说明与隐私约定 |
+| [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md) | 实测记录、被推翻的假设与已知问题 |
+| [`MCP_DESIGN.md`](MCP_DESIGN.md) | MCP 化设计记录 |
+| [`DISTRIBUTION.md`](DISTRIBUTION.md) | 三平台分发与注册方式 |
+| [`SETUP_DESIGN.md`](SETUP_DESIGN.md) | 一键配置流程的设计依据 |
+| [`archive/README.md`](archive/README.md) | 归档内容与原因 |
 
 ## License
 

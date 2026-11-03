@@ -24,7 +24,7 @@
 工具的依赖在 uv 自己的环境里，**不碰用户的系统 Python**。
 
 **你的角色**：跑确定性命令、判断环境、处理失败重试、问用户偏好。
-**不要**手写配置文件 —— 用 `elang setup-mcp`（它会备份 + 校验 + 失败回滚）。
+**不要**手写配置文件，改用 `elang setup-mcp`，它会备份、校验并在失败时回滚。
 
 ---
 
@@ -38,7 +38,7 @@
 | **DSH** | `~/.dsh/profiles/<profile>/cordis.patch.yml` | YAML |
 | **Codex** | `~/.codex/config.toml` | TOML |
 
-**如果不确定，直接问用户。** 不要猜 —— 猜错会写错文件。
+**如果不确定，直接询问用户。** 不要猜测，猜错会写入错误的文件。
 
 ---
 
@@ -112,7 +112,7 @@ elang doctor
 键名两套都认（带 ELANG_ 前缀的优先）：
     ELANG_CAS_USERNAME  /  CAS_USERNAME
     ELANG_CAS_PASSWORD  /  CAS_PASSWORD
-真实环境变量优先于以上任何文件 —— 两套键名都适用。
+真实环境变量优先于以上任何文件，两套键名都适用。
 ```
 
 `doctor` 会显示**实际读取的文件**和每个值的来源。若显示 `fallback` 而不是
