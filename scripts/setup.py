@@ -52,9 +52,25 @@ def elang_cmd():
     return shutil.which("elang")
 
 
+def _uv_hint():
+    """Print how to install uv WITHOUT installing it.
+
+    uv is a system-level change: the installer writes the user's home and edits
+    PATH. This script must not do that on its own — it prints the official command
+    and leaves the decision (and the approval) to the user.
+    """
+    print("  `uv` is not on PATH. Ask the user before installing it.")
+    print('  Windows:     powershell -ExecutionPolicy ByPass -c '
+          '"irm https://astral.sh/uv/install.ps1 | iex"')
+    print("  macOS/Linux: curl -LsSf https://astral.sh/uv/install.sh | sh")
+    print("  (A plain venv also works: python -m venv .venv, then run "
+          "scripts/elang_reader.py from the repo.)")
+
+
 def install_tool(check_only):
     print("\n[1/3] tool")
     existing = elang_cmd()
+    has_uv = shutil.which("uv")
     if existing:
         print(f"  already installed: {existing}")
         if check_only:
@@ -63,13 +79,13 @@ def install_tool(check_only):
     elif check_only:
         print("  NOT installed (no `elang` on PATH)")
         print("  install with: uv tool install git+<repo-url>")
+        if not has_uv:
+            _uv_hint()
         return False
 
-    if not shutil.which("uv"):
-        print("  FAILED: `uv` not found on PATH.")
-        print("  Install uv first: https://docs.astral.sh/uv/")
-        print("  (A plain venv also works: python -m venv .venv, then run "
-              "scripts/elang_reader.py from the repo.)")
+    if not has_uv:
+        print("  FAILED: cannot install the tool without `uv`.")
+        _uv_hint()
         return False
 
     ok, out = run(["uv", "tool", "install", "--force", str(REPO)])

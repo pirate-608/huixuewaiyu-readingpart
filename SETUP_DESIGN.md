@@ -142,7 +142,7 @@ startup_timeout_sec = 120
   uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
   验证：`elang list` 能列出 doctor / init-env / install-browser /
         setup-mcp / install-skill / run / mcp
-  若 uv 不存在，先告诉我，不要擅自装 uv。
+  若 uv 不存在，先给出安装命令并征求我的同意，不要未经询问就安装。
 
 【第 2 步】装浏览器
   elang install-browser
@@ -216,7 +216,7 @@ startup_timeout_sec = 120
 | `~/.codex/config.toml` 里有 API key，误提交 | 它不在仓库里；但备份文件也应落在原目录旁或 temp，**不进仓库** |
 | DSH 的 MCP server 可能受沙箱限制 | 提示词里说明；`failOnStartupError: true` 让问题显式化 |
 | agent 跳过失败步骤 | 提示词明确要求"报告原始错误，不要假装成功" |
-| uv 不存在时 agent 擅自安装 | 提示词要求先询问 |
+| uv 不存在时 agent 擅自安装 | 提示词要求：给出官方安装命令并**先征求同意**，同意后才执行 |
 
 ---
 
@@ -224,6 +224,8 @@ startup_timeout_sec = 120
 
 - **不让 agent 手写配置文件** —— 必须走 `setup-mcp`
 - **不让 agent 读密码** —— 用户自己填
-- **不自动装 uv** —— 那是用户的系统级决定
+- **不自动装 uv** —— 那是用户的系统级决定；给出官方命令（Windows 用
+  `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`），
+  先问再装
 - **不猜 scope** —— 问用户
 - **不为了"看起来成功"而吞错误**

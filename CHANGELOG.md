@@ -3694,4 +3694,43 @@ profile 因为指向工作区而不受影响）。后果是每次都要重新 CA
 - `test_docs_match_code.py` 的 `DOCS` 列表**故意不包含**本文件：它记录历史
   命令，按设计允许出现过时命令，纳入自动检查只会误报。
 
+---
+
+## 48. 安装 uv：给出官方命令，但先问用户
+
+旧文档只说"`uv` 不存在时告诉用户，不要擅自安装"，没有给具体命令，装不装、怎么装
+全靠用户自己查。而这条命令是平台相关的，Windows 上官方推荐用 PowerShell 脚本。
+
+现在的规则：
+
+1. **给出官方安装脚本**，让用户看到要执行什么：
+
+   Windows（PowerShell）：
+
+   ```powershell
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+
+   macOS / Linux：
+
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **agent 不得未经询问就安装**，要拿到用户明确同意再执行。理由：uv 是系统级
+   改动，会写用户目录并修改 PATH。
+3. 安装脚本从 `astral.sh` 下载，属于"需要代理"的那一类；失败不要连续重试
+   （第 4 条规则）。
+4. 装完必须重开终端，`uv --version` 能跑再继续。用户拒绝时：clone 仓库 + 自建
+   venv，直接从仓库运行 `scripts/elang_reader.py`。
+
+落实位置：`SETUP.md` 第 1 步与排查表、`SKILL.md` 安装一节、`README.md` 依赖
+一节、`SETUP_DESIGN.md` 的提示词与"不做的事"，以及 `scripts/setup.py` 的失败
+提示（它只打印命令，绝不自己装）。
+
+顺带修掉一处旧错误：`SETUP.md` 原来把"替代方案"写成 `git clone` 后
+`python scripts/setup.py`，但那个脚本自己就要求 PATH 上有 `uv`，等于循环依赖。
+现在改成自建 venv（`python -m venv .venv` + `pip install -r requirements.txt`），
+再从仓库运行 `scripts/elang_reader.py`。
+
 

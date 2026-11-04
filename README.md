@@ -320,6 +320,23 @@ python scripts/doctor.py
 - 浏览器：`elang install-browser` 复用已装的 Chrome / Edge，或安装自带的 Chromium
 - ZJU CAS 账号
 
+**没有 `uv` 时**，用官方安装脚本，装完重开终端（安装器改的是用户 PATH）：
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+macOS / Linux：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+这一步要访问外网（GitHub、`astral.sh`），通常需要代理。如果让 agent 代装，
+它会先征求你的同意再执行，不会未经询问就装。
+
 不要把依赖装进系统 Python，也不要用 `--system-site-packages` 借用系统包，
 否则工具换一台机器后会失效。`elang doctor` 会检测并警告这种情况。
 

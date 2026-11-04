@@ -249,7 +249,23 @@ elang doctor                 # 到这一步应为 All good.
 elang install-skill --agent <dsh|codex|claude> --scope <global|project>
 ```
 
-`uv` 不存在时：**告诉用户，不要擅自安装**（那是系统级决定）。
+`uv` 不存在时：**把安装命令给用户看，得到明确同意后再装**。这是系统级改动，
+会写用户目录并改 PATH，不要未经询问就执行。
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+macOS / Linux：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+装完重开终端，`uv --version` 能跑再继续。用户拒绝装 uv 时：clone 仓库 + 自建
+venv，直接从仓库运行 `scripts/elang_reader.py`（此时没有 `elang` 命令）。
 
 ## 环境要求
 

@@ -24,6 +24,7 @@
 工具的依赖在 uv 自己的环境里，**不碰用户的系统 Python**。
 
 **你的角色**：跑确定性命令、判断环境、处理失败重试、问用户偏好。
+**涉及系统级改动（装 uv、改 PATH、改 agent 配置）时先征求用户同意。**
 **不要**手写配置文件，改用 `elang setup-mcp`，它会备份、校验并在失败时回滚。
 
 ---
@@ -44,6 +45,14 @@
 
 ## 第 1 步：装工具
 
+先确认 `uv` 可用：
+
+```bash
+uv --version
+```
+
+不可用时**不要自己装**，按本节末尾的说明先征求用户同意。
+
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
@@ -56,8 +65,26 @@ elang list
 
 应列出：`doctor` `init-env` `install-browser` `setup-mcp` `install-skill` `run` `mcp`，以及答题侧动词 `pending` `answer` `skip` `continue` `stop`
 
-**若 `uv` 不存在**：告诉用户，**不要擅自安装 uv**（那是系统级决定）。
-替代方案：`git clone` 后 `python scripts/setup.py`。
+**若 `uv` 不存在**：不要未经询问就安装。把下面的安装命令给用户看，
+**得到明确同意后再执行**。装 uv 是系统级改动：它会写入用户目录并修改 PATH。
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+macOS / Linux：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+- 安装脚本从 `astral.sh` 下载，需要外网；此步属于"需要代理"的那一类，失败不要连续重试。
+- 装完必须**重开终端**（安装器改的是用户 PATH），`uv --version` 能跑再回到第 1 步。
+- 用户拒绝装 uv 时：`git clone` 后自建 venv（`python -m venv .venv`，
+  在 venv 里 `pip install -r requirements.txt`），从仓库运行 `scripts/elang_reader.py`。
+  这样能用求解器与 CLI，但没有 `elang` 命令，MCP 注册与 skill 安装仍以 uv 路径为准。
 
 ---
 
@@ -204,6 +231,7 @@ elang setup-mcp --host <agent> --dry-run
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | `elang: command not found` | 工具没装或不在 PATH | 重跑 `uv tool install`；提示用户重开终端 |
+| 提示 `uv` 不存在 | 未安装 uv | 给出官方安装脚本，**得到用户同意后**再执行；装完重开终端 |
 | `elang doctor` 报 `EPERM`/`mkdtemp` | 临时目录不可写 | 把 `TEMP`/`TMP` 指向可写目录 |
 | `browser launch: FAILED` | 没有可用浏览器 | `elang install-browser`（会先复用已装 Chrome/Edge；需要下载时报网络错误就重试） |
 | `credentials ... (missing)` | 没有 `.env` | `elang init-env`，让用户填 |
