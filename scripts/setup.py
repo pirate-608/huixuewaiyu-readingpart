@@ -53,16 +53,12 @@ def elang_cmd():
 
 
 def _uv_hint():
-    """Print how to install uv WITHOUT installing it.
+    """Say what is missing and where the official docs are.
 
-    uv is a system-level change: the installer writes the user's home and edits
-    PATH. This script must not do that on its own — it prints the official command
-    and leaves the decision (and the approval) to the user.
+    Deliberately does NOT print an install command: how the user's machine is
+    changed is the user's decision, not this script's.
     """
-    print("  `uv` is not on PATH. Ask the user before installing it.")
-    print('  Windows:     powershell -ExecutionPolicy ByPass -c '
-          '"irm https://astral.sh/uv/install.ps1 | iex"')
-    print("  macOS/Linux: curl -LsSf https://astral.sh/uv/install.sh | sh")
+    print("  `uv` is not on PATH. Install it first: https://docs.astral.sh/uv/")
     print("  (A plain venv also works: python -m venv .venv, then run "
           "scripts/elang_reader.py from the repo.)")
 
@@ -84,7 +80,7 @@ def install_tool(check_only):
         return False
 
     if not has_uv:
-        print("  FAILED: cannot install the tool without `uv`.")
+        print("  FAILED: `uv` not found on PATH.")
         _uv_hint()
         return False
 

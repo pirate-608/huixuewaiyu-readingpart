@@ -3733,6 +3733,9 @@ profile 因为指向工作区而不受影响）。后果是每次都要重新 CA
 现在改成自建 venv（`python -m venv .venv` + `pip install -r requirements.txt`），
 再从仓库运行 `scripts/elang_reader.py`。
 
+> 2026-11-04 撤回：上面这两条安装命令已从 README / SETUP.md / SKILL.md 删除，
+> 理由见第 50 节。
+
 ---
 
 ## 49. 支持范围定案：只支持 Windows
@@ -3783,5 +3786,27 @@ macOS 从未实测；静态看没有阻碍项，但"静态看没问题"不等于
 
 代码里的 POSIX 分支（`/tmp`、symlink、chmod、macOS/Linux 浏览器探测）不删：
 它们不影响 Windows，删掉反而增加回归风险；但也不构成承诺，不作为修 bug 的目标。
+
+---
+
+## 50. 撤回 uv 安装命令的推荐
+
+第 48 节把官方安装脚本写进了 README、SETUP.md 和 SKILL.md。这越界了：
+
+- 装 uv 是在改动用户的电脑环境，工具文档不该替用户决定怎么装
+- SETUP.md 与 SKILL.md 是 agent 的执行清单，多一段与"跑对命令"无关的内容
+  就多一分干扰；原来的"告诉用户，不要擅自安装"已经够用
+- README 面向普通用户，依赖列表写清即可，不需要附安装脚本
+
+已恢复的表述：
+
+- SETUP.md：第 1 步直接给 `uv tool install`；uv 缺失时只保留"告诉用户，
+  不要擅自安装"一句加自建 venv 的替代方案；排查表里对应的行删除
+- SKILL.md：同样恢复为一句
+- README.md：删掉整个"没有 `uv` 时"的安装段落，依赖列表保持原样
+- SETUP_DESIGN.md：提示词与"不做的事"退回原表述
+- `scripts/setup.py`：仍然只报告 `uv` 不在 PATH 并给官方文档链接，不打印安装命令
+
+第 49 节（只支持 Windows）与 `.gitattributes` 的改动不受影响。
 
 
