@@ -33,6 +33,8 @@ Thumbs.db
 # Playwright
 playwright-report/
 test-results/
+# 浏览器把日志写进 cwd 时产生的文件（启动 chromium 实测会生成）
+debug.log
 
 # 临时截图（脚本运行产物）
 /tmp/elang_screenshots/

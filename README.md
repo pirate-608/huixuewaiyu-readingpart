@@ -56,8 +56,15 @@ uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 elang install-browser
 ```
 
-该命令先检查是否已有可用构建，存在则不做任何操作；缺失时安装到工具的私有缓存
-（`~/.elang/browsers`）。使用 `--shared` 可安装到 Playwright 的共享缓存。
+命令按可用性选择，不重复劳动：
+
+- 已有 Chromium 构建：什么都不做
+- 没有构建但装了 Chrome 或 Edge：直接复用，不下载
+- 两者都没有：安装 Chromium 到工具的私有缓存 `~/.elang/browsers`（约 683 MB）
+
+`--bundled` 强制安装自带构建，`--shared` 安装到 Playwright 的共享缓存。
+复用系统浏览器时 `elang doctor` 会写明用的是哪一个；想固定选择，设置
+`ELANG_BROWSER=chrome`、`msedge` 或 `chromium`。
 
 ### 3. 配置凭据
 
@@ -175,7 +182,7 @@ elang stop               # 停止
 |---|---|
 | `elang doctor` | 报告环境、浏览器与凭据状态 |
 | `elang init-env` | 生成 `.env` 模板 |
-| `elang install-browser` | 安装 Chromium |
+| `elang install-browser` | 选浏览器：复用已装的 Chrome/Edge，或安装 Chromium |
 | `elang install-skill` | 注册 skill |
 | `elang setup-mcp` | 注册 MCP，`--host` 取 `claude`、`dsh` 或 `codex` |
 | `elang pending` | 显示 `elang run` 正在等待的文章 |
@@ -274,7 +281,7 @@ huixuewaiyu-readingpart/
 │   ├── config.py               # 凭据解析，全项目唯一实现
 │   ├── doctor.py               # 环境、浏览器与凭据诊断
 │   ├── init_env.py             # 生成 .env 模板
-│   ├── install_browser.py      # 安装 Chromium
+│   ├── install_browser.py      # 选择 / 安装浏览器
 │   ├── install_skill.py        # 注册到各 agent 根目录
 │   ├── setup_mcp.py            # 生成 MCP 注册
 │   ├── elang_reader.py         # 浏览器自动化核心与批处理 CLI
@@ -309,7 +316,7 @@ python scripts/doctor.py
 
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)，用于安装工具（推荐）
-- Chromium，由 `elang install-browser` 安装
+- 浏览器：`elang install-browser` 复用已装的 Chrome / Edge，或安装自带的 Chromium
 - ZJU CAS 账号
 
 不要把依赖装进系统 Python，也不要用 `--system-site-packages` 借用系统包，
@@ -326,7 +333,7 @@ CAS 登录页可能无法打开，或者登录直接失败。这是站点侧的�
 
 | 阶段 | 网络 |
 |---|---|
-| 安装：`uv tool install`、`elang install-browser` | 需要访问 GitHub 与浏览器下载源，通常需要代理 |
+| 安装：`uv tool install`、`elang install-browser`（需要下载时） | 需要访问 GitHub 与浏览器下载源，通常需要代理 |
 | 运行：`elang run`、MCP | 需要直连慧学外语与 zjuam，不能走代理 |
 
 处理方式是在代理软件中配置分流规则，让下列域名直连，其余流量走代理：
@@ -338,8 +345,8 @@ zjuam.zju.edu.cn
 
 没有分流规则时，按顺序操作：开启代理完成安装，关闭代理后再运行。
 
-反过来说，关闭代理后 `git clone`、`uv tool install`、`elang install-browser`
-会失败。这类失败源于网络，不要反复重试；先确认代理状态再继续。
+反过来说，关闭代理后 `git clone`、`uv tool install`、需要下载的
+`elang install-browser` 会失败。这类失败源于网络，不要反复重试；先确认代理状态再继续。
 
 ### 如何判断是网络问题还是工具问题
 

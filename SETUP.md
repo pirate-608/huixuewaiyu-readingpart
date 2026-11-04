@@ -77,9 +77,10 @@ elang doctor
 
 **说明**：
 
-- 这一步可能下载约 680MB
-- 报**网络/TLS 错误**是常见的瞬时问题 → **直接重试**即可（会续传）
-- 若已有可用构建，它会**什么都不做**（这是正常的）
+- 顺序是"先复用、再下载"：已有 Chromium 构建则什么都不做；没有构建但装了
+  Chrome / Edge 则直接复用，**不联网也不下载**；两者都没有时才下载约 680MB
+- 强制安装自带构建用 `--bundled`；装到 Playwright 共享缓存用 `--shared`
+- 需要下载时，报**网络/TLS 错误**是常见的瞬时问题 → **直接重试**即可（会续传）
 
 ---
 
@@ -204,7 +205,7 @@ elang setup-mcp --host <agent> --dry-run
 |---|---|---|
 | `elang: command not found` | 工具没装或不在 PATH | 重跑 `uv tool install`；提示用户重开终端 |
 | `elang doctor` 报 `EPERM`/`mkdtemp` | 临时目录不可写 | 把 `TEMP`/`TMP` 指向可写目录 |
-| `browser launch: FAILED` | 浏览器没装 | `elang install-browser`，网络错误就重试 |
+| `browser launch: FAILED` | 没有可用浏览器 | `elang install-browser`（会先复用已装 Chrome/Edge；需要下载时报网络错误就重试） |
 | `credentials ... (missing)` | 没有 `.env` | `elang init-env`，让用户填 |
 | `WARNING: ... OUTSIDE this interpreter's tree` | 依赖是借来的 | 重建隔离环境（`uv tool install`） |
 | MCP 注册后看不到工具 | agent 没重启 | 重启它 |

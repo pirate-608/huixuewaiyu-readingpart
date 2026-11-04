@@ -73,7 +73,7 @@ cli  →  {elang_reader(run), elang_mcp(mcp), answer_ipc(pending/answer/...), SI
 ```bash
 elang doctor                            # 依赖 / 浏览器 / 凭据，并给出修复命令
 elang init-env                          # 在工作区根生成 .env 模板
-elang install-browser                   # 装 Chromium（已有可用构建则跳过）
+elang install-browser                   # 复用已装 Chrome/Edge，没有才下载 Chromium
 elang setup-mcp --host claude|dsh|codex # 注册 MCP（备份+校验+回滚）
 elang install-skill --agent claude --scope global|project
 elang run batch-all                     # 驱动求解
@@ -120,12 +120,25 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 
 ### 浏览器
 
-**自带 Chromium** + `launch_persistent_context`，profile 在 `~/.elang/browser-profile`
-（用 `ELANG_PROFILE_DIR` 覆盖）。不需要系统装浏览器，这是可分发的前提。
-`ELANG_BROWSER=msedge` 是逃生口。
+`launch_persistent_context` + 持久化 profile，profile 在 `~/.elang/browser-profile`
+（用 `ELANG_PROFILE_DIR` 覆盖）。浏览器来源有两级，`config.browser_choice()`
+是唯一的决定处：
 
-**不要在代码里钉死浏览器版本或路径。** 需要哪个构建取决于 Playwright 版本；
-`doctor.py` 负责报告并打印安装命令。`requirements.txt` 里的
+| 优先级 | 来源 | 何时使用 |
+|---|---|---|
+| 1 | `ELANG_BROWSER` | 显式指定：`chromium`、`chrome`、`msedge`，或可执行文件路径 |
+| 2 | 自带 Chromium | 默认。自包含，与运行它的 Playwright 版本匹配 |
+| 3 | 已装 Chrome / Edge | 没有自带构建时用它，省掉约 683 MB 下载 |
+
+实测（Playwright 1.60，自带 chromium 148）：系统 Chrome 157 与 Edge 156 都能用
+`launch_persistent_context` 启动，headless 与有头均可，且**同一个 profile 目录
+可与自带构建双向共用**。此前"`channel=msedge` 会拒绝启动"的结论已推翻——
+当时是 `launch()` 额外传了命令行参数，`launch_persistent_context` 不传。
+
+**不要在代码里钉死浏览器版本或路径。** 探测顺序是注册表 App Paths、常见安装
+位置、PATH，找到可执行文件后自己读版本；不用 `channel=` 让 Playwright 自己去
+注册表找，那样会漏掉 scoop、便携版、tarball 等安装。`doctor.py` 报告**实际会
+启动哪一个**，并真的启动一次。`requirements.txt` 里的
 `playwright>=1.49,<1.61` 区间必须与浏览器一起升级。
 
 实测：持久化 profile **本身不保留 CAS 会话**。
@@ -249,7 +262,7 @@ git config core.hooksPath .githooks
 
 - Python 3.11+
 - `uv`（推荐）
-- Chromium（`doctor.py` 报告）
+- 浏览器：自带 Chromium，或系统 Chrome / Edge（`doctor.py` 报告）
 - ZJU CAS 账号
 
 ### 沙箱限制（实测）

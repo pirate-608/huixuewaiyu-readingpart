@@ -9,6 +9,10 @@ than hard-code a path or pin a build (which goes stale and varies per machine),
 this prints the exact command and lets the caller decide. An agent running the
 skill can read the output and run the command itself.
 
+This also reports WHICH browser `elang run` would launch, and launch-tests that
+one: an installed Chrome is a legitimate choice that needs no download, so the
+check must not be tied to the bundled build's path.
+
 Usage:
     python scripts/doctor.py
     python scripts/doctor.py --json
@@ -50,13 +54,15 @@ def check_self_contained(mods):
 
 
 def check_browser():
-    """Can Playwright launch? Report the executable and which cache it came from."""
+    """Can Playwright launch the browser `elang run` would pick?"""
     result = {"ok": False, "executable": None, "error": None,
               "browsers_path": os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "(default)",
-              "sources": None}
+              "sources": None, "choice": None, "launch_kwargs": None}
     try:
         result["sources"] = config.describe_browser()
         result["usable_anywhere"] = config.has_browser()
+        result["choice"] = config.browser_choice()
+        result["launch_kwargs"] = config.browser_launch_kwargs(result["choice"])
     except Exception:
         pass
     try:
@@ -66,13 +72,25 @@ def check_browser():
         return result
     try:
         with sync_playwright() as pw:
-            result["executable"] = pw.chromium.executable_path
-            exists = Path(result["executable"]).exists()
-            result["binary_exists"] = exists
-            if not exists:
-                result["error"] = "browser binary not present at that path"
+            choice = result.get("choice") or {}
+            kwargs = result.get("launch_kwargs") or {}
+            if choice.get("mode") == "none":
+                result["error"] = ("no browser: no bundled chromium and no "
+                                   "installed Chrome/Edge")
                 return result
-            b = pw.chromium.launch(headless=True)
+            if kwargs.get("executable_path"):
+                result["executable"] = kwargs["executable_path"]
+                if not Path(result["executable"]).exists():
+                    result["error"] = "browser executable not present at that path"
+                    return result
+            elif kwargs.get("channel"):
+                result["executable"] = f"channel={kwargs['channel']}"
+            else:
+                result["executable"] = pw.chromium.executable_path
+                if not Path(result["executable"]).exists():
+                    result["error"] = "browser binary not present at that path"
+                    return result
+            b = pw.chromium.launch(headless=True, **kwargs)
             b.close()
             result["ok"] = True
     except Exception as e:
@@ -141,7 +159,8 @@ def main():
     # 0.07s. Naming the variables here saves the caller from rediscovering that.
     fixes = []
     if not browser["ok"]:
-        fixes.append('elang install-browser')
+        fixes.append("elang install-browser  (downloads chromium, or reuses an "
+                     "installed Chrome)")
         if os.name == "nt":
             fixes.append(
                 "if a launch then fails with EPERM/mkdtemp, point TEMP at a\n"

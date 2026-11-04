@@ -2062,11 +2062,17 @@ async def open_browser(playwright):
 
     Design notes, all verified on a real machine:
 
-    * **Bundled Chromium, no `channel=`.** Using `channel="msedge"` made the
-      browser refuse to start (Edge complained about unsupported command-line
-      flags) and it ties the tool to a system-installed browser. The bundled
-      Chromium is installed by `playwright install chromium`, which the setup
-      scripts already run, so this works on any machine with no user setup.
+    * **Browser selection is a decision, not a constant.** Bare Playwright (no
+      `channel=`, no `executable_path`) uses the bundled chromium, which is the
+      default and works on any machine that ran `playwright install chromium`.
+      Reusing an installed Chrome/Edge is also supported and saves the ~683 MB
+      download; `config.browser_choice()` owns that decision and reports why.
+      Measured with Playwright 1.60: system Chrome 157 and Edge 156 launch this
+      way, headless and headed, and share one profile directory with chromium
+      148 in either direction. (An earlier note blamed `channel="msedge"` for
+      refusing to start; the actual culprit was the extra command-line flags
+      passed to `launch()` at the time, which `launch_persistent_context` does
+      not pass.)
     * **`launch_persistent_context`, not `launch` + args.** Passing
       `--user-data-dir` to `launch()` is rejected by Playwright; the persistent
       API is the supported way to get a stable profile. The profile lives under
@@ -2084,15 +2090,11 @@ async def open_browser(playwright):
     _ensure_credentials(prompt_ok=False)
     _load_answer_bank()
 
-    channel = os.getenv("ELANG_BROWSER", "").strip()
     kwargs = {
         "user_data_dir": str(BROWSER_PROFILE_DIR),
         "headless": False,
         "viewport": {"width": 1440, "height": 900},
     }
-    if channel and channel != "chromium":
-        # escape hatch for anyone who specifically wants a system browser
-        kwargs["channel"] = channel
 
     # Tell Playwright where to FIND the browser before launching. Without this it
     # always uses the shared cache, so a browser installed into the tool's private
@@ -2107,6 +2109,22 @@ async def open_browser(playwright):
         if not override:
             if _config.BROWSERS_DIR.is_dir():
                 os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_config.BROWSERS_DIR)
+
+    choice = (_config.browser_choice() if _config is not None
+              else {"mode": "bundled", "reason": "config module unavailable",
+                    "label": "bundled chromium", "version": ""})
+    if choice["mode"] == "none":
+        raise RuntimeError(
+            "No browser is available for this tool.\n"
+            "  Install one:  elang install-browser\n"
+            "  Or reuse an installed Chrome/Edge:  set ELANG_BROWSER=chrome\n"
+            f"  Details: {choice['reason']}"
+        )
+    kwargs.update(_config.browser_launch_kwargs(choice) if _config is not None else {})
+    if choice["mode"] == "system":
+        version = f" v{choice['version']}" if choice.get("version") else ""
+        print(f"[elang] browser: {choice['label']}{version} "
+              f"({choice['reason']})")
 
     Path(BROWSER_PROFILE_DIR).mkdir(parents=True, exist_ok=True)
     try:

@@ -22,6 +22,9 @@ never override what the host supplied.
 No upward directory walking, no agent detection, no pointer files.
 """
 import os
+import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -264,6 +267,261 @@ def has_browser(paths=None):
     return False
 
 
+# ------------------------------------------------------- installed browsers
+# A machine that already has Chrome installed should not download ~683 MB of
+# chromium. Measured here (Playwright 1.60, bundled chromium 148 = Chrome 148):
+# system Chrome 157 and Edge 156 both launch through `launch_persistent_context`,
+# headless and headed, execute the site's Vue code, and can share ONE profile
+# directory with the bundled build in either direction. So reusing them is a
+# supported option, not an escape hatch.
+#
+# Detection is by PATH, deliberately not by asking Playwright: `channel="chrome"`
+# relies on Playwright's own registry lookup, which misses non-standard installs
+# (scoop, portable copies, tarballs). Finding the executable ourselves and
+# passing `executable_path` covers all of them; `channel` is only used when the
+# user names a channel we could NOT locate, so the old behaviour still applies.
+
+SYSTEM_CHANNELS = ("chrome", "msedge")
+SYSTEM_LABELS = {"chrome": "Google Chrome", "msedge": "Microsoft Edge"}
+
+
+def _windows_file_version(path):
+    """Product version of a Windows executable, or "" when it cannot be read."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        ver = ctypes.WinDLL("version")
+        size = ver.GetFileVersionInfoSizeW(str(path), None)
+        if not size:
+            return ""
+        buf = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(str(path), 0, size, buf):
+            return ""
+        ptr = ctypes.c_void_p()
+        length = wintypes.UINT()
+        if not ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr),
+                                 ctypes.byref(length)):
+            return ""
+
+        class _Fixed(ctypes.Structure):
+            _fields_ = [
+                ("signature", ctypes.c_uint32), ("struc", ctypes.c_uint32),
+                ("file_ms", ctypes.c_uint32), ("file_ls", ctypes.c_uint32),
+                ("prod_ms", ctypes.c_uint32), ("prod_ls", ctypes.c_uint32),
+                ("flags_mask", ctypes.c_uint32), ("flags", ctypes.c_uint32),
+                ("os", ctypes.c_uint32), ("type", ctypes.c_uint32),
+                ("subtype", ctypes.c_uint32), ("date_ms", ctypes.c_uint32),
+                ("date_ls", ctypes.c_uint32),
+            ]
+
+        info = ctypes.cast(ptr, ctypes.POINTER(_Fixed)).contents
+        return (f"{info.prod_ms >> 16}.{info.prod_ms & 0xFFFF}."
+                f"{info.prod_ls >> 16}.{info.prod_ls & 0xFFFF}")
+    except Exception:
+        return ""
+
+
+def exe_version(path):
+    """Best-effort version string for a browser executable.
+
+    Windows: read the PE version resource (the exe detaches from the console, so
+    `--version` prints nothing there). macOS/Linux: ask the binary. A failure
+    here is cosmetic — detection never depends on it.
+    """
+    path = Path(path)
+    if os.name == "nt":
+        return _windows_file_version(path)
+    try:
+        out = subprocess.run([str(path), "--version"], capture_output=True,
+                             text=True, timeout=10).stdout
+        m = re.search(r"(\d+(?:\.\d+){2,})", out or "")
+        return m.group(1) if m else ""
+    except Exception:
+        return ""
+
+
+def _browser_candidates():
+    """Plausible install locations per channel, most authoritative first."""
+    out = {"chrome": [], "msedge": []}
+    if os.name == "nt":
+        pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+        pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        local = os.environ.get("LOCALAPPDATA", "")
+        out["chrome"] = [rf"{pf}\Google\Chrome\Application\chrome.exe",
+                         rf"{pf86}\Google\Chrome\Application\chrome.exe",
+                         rf"{local}\Google\Chrome\Application\chrome.exe"]
+        out["msedge"] = [rf"{pf86}\Microsoft\Edge\Application\msedge.exe",
+                         rf"{pf}\Microsoft\Edge\Application\msedge.exe",
+                         rf"{local}\Microsoft\Edge\Application\msedge.exe"]
+    elif sys.platform == "darwin":
+        out["chrome"] = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            str(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ]
+        out["msedge"] = [
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            str(Path.home() / "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+        ]
+    else:
+        out["chrome"] = ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
+                         "/opt/google/chrome/chrome", "/usr/bin/chromium",
+                         "/usr/bin/chromium-browser", "/snap/bin/chromium"]
+        out["msedge"] = ["/usr/bin/microsoft-edge", "/usr/bin/microsoft-edge-stable",
+                         "/opt/microsoft/msedge/msedge"]
+    return out
+
+
+def _windows_app_paths():
+    """Executables advertised by the registry's App Paths keys."""
+    try:
+        import winreg
+    except Exception:
+        return {}
+    found = {}
+    base = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for exe, channel in (("chrome.exe", "chrome"), ("msedge.exe", "msedge")):
+            if channel in found:
+                continue
+            try:
+                with winreg.OpenKey(hive, base + "\\" + exe) as k:
+                    value = winreg.QueryValueEx(k, None)[0]
+                if value and Path(value).is_file():
+                    found[channel] = value
+            except Exception:
+                continue
+    return found
+
+
+def find_system_browser(channel):
+    """Locate an installed browser. Returns a dict, or None when absent."""
+    channel = (channel or "").strip().lower()
+    if channel in ("edge", "microsoft edge", "microsoft-edge"):
+        channel = "msedge"
+    if channel not in SYSTEM_CHANNELS:
+        return None
+
+    declared = _windows_app_paths() if os.name == "nt" else {}
+    ordered = list(_browser_candidates().get(channel, []))
+    if channel in declared:
+        ordered.insert(0, declared[channel])
+
+    names = (["chrome.exe", "chrome", "google-chrome", "chromium"]
+             if channel == "chrome"
+             else ["msedge.exe", "msedge", "microsoft-edge"])
+    ordered += [w for w in (shutil.which(n) for n in names) if w]
+
+    seen = set()
+    for cand in ordered:
+        key = str(cand)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        try:
+            if Path(cand).is_file():
+                return {"channel": channel, "label": SYSTEM_LABELS[channel],
+                        "path": key, "version": exe_version(cand)}
+        except Exception:
+            continue
+    return None
+
+
+def system_browsers():
+    """Installed system browsers, Chrome first."""
+    found = []
+    for ch in SYSTEM_CHANNELS:
+        b = find_system_browser(ch)
+        if b:
+            found.append(b)
+    return found
+
+
+def _bundled_choice(reason):
+    for p in browser_search_paths():
+        try:
+            if p.is_dir() and any(p.glob("chromium-*")):
+                return {"mode": "bundled", "channel": None, "path": None,
+                        "label": "bundled chromium", "version": "",
+                        "cache": str(p), "reason": reason}
+        except Exception:
+            continue
+    return {"mode": "bundled", "channel": None, "path": None,
+            "label": "bundled chromium", "version": "", "cache": "",
+            "reason": reason}
+
+
+def _system_choice(browser, reason):
+    return {"mode": "system", "channel": browser["channel"],
+            "path": browser["path"], "label": browser["label"],
+            "version": browser.get("version", ""), "cache": "",
+            "reason": reason}
+
+
+def browser_choice():
+    """Which browser `elang run` will launch, and why.
+
+    Precedence:
+
+      1. ``$ELANG_BROWSER`` — explicit, always wins:
+
+         ======================  ==========================================
+         ``chromium``/``bundled`` the tool's own build
+         ``chrome``/``msedge``    that installed browser
+         an executable path       exactly that executable
+         anything else            passed to Playwright as a channel unchanged
+         ======================  ==========================================
+
+      2. a bundled chromium build, when one is installed (self-contained default)
+      3. an installed Chrome/Edge when there is no bundled build — this is what
+         saves the ~683 MB download on a machine that already has a browser
+      4. nothing: report it, and `elang install-browser` fixes it
+    """
+    raw = (os.environ.get("ELANG_BROWSER") or "").strip()
+    if raw:
+        low = raw.lower()
+        if low in ("chromium", "bundled", "chromium-bundled"):
+            return _bundled_choice("ELANG_BROWSER=" + raw)
+        if os.sep in raw or "/" in raw or low.endswith((".exe", ".app")):
+            p = Path(raw).expanduser()
+            if not p.is_file():
+                return {"mode": "none", "channel": None, "path": None,
+                        "label": p.name, "version": "", "cache": "",
+                        "reason": f"ELANG_BROWSER points at a missing file: {p}"}
+            return {"mode": "system", "channel": None, "path": str(p),
+                    "label": p.name, "version": exe_version(p), "cache": "",
+                    "reason": "ELANG_BROWSER=" + raw}
+        found = find_system_browser(low)
+        if found:
+            return _system_choice(found, "ELANG_BROWSER=" + raw)
+        # Unlisted channel name: hand it to Playwright verbatim, which is exactly
+        # what the old escape hatch did.
+        return {"mode": "system", "channel": raw, "path": None,
+                "label": raw, "version": "", "cache": "",
+                "reason": "ELANG_BROWSER=" + raw}
+
+    if has_browser():
+        return _bundled_choice("a bundled chromium build is installed")
+    found = system_browsers()
+    if found:
+        return _system_choice(
+            found[0], "no bundled chromium; using the installed browser")
+    return {"mode": "none", "channel": None, "path": None, "label": "none",
+            "version": "", "cache": "",
+            "reason": "no bundled chromium and no system Chrome/Edge"}
+
+
+def browser_launch_kwargs(choice=None):
+    """Playwright launch kwargs that select the chosen browser."""
+    choice = choice or browser_choice()
+    if choice.get("mode") == "system":
+        if choice.get("path"):
+            return {"executable_path": choice["path"]}
+        if choice.get("channel"):
+            return {"channel": choice["channel"]}
+    return {}
+
+
 def describe_browser():
     """Report the browser situation without launching anything."""
     override = (os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "").strip()
@@ -275,6 +533,14 @@ def describe_browser():
     lines.append(f"shared cache : {shared_browsers_dir()}  "
                  f"({'present' if shared_browsers_dir().is_dir() else 'absent'})")
     lines.append(f"usable       : {has_browser()}")
+    for b in system_browsers():
+        lines.append(f"system {b['channel']:<10}: {b['path']}"
+                     f"  v{b['version'] or '?'}")
+    if not system_browsers():
+        lines.append("system       : no installed Chrome/Edge found")
+    ch = browser_choice()
+    detail = ch["label"] + (f" v{ch['version']}" if ch["version"] else "")
+    lines.append(f"choice       : {ch['mode']} — {detail} ({ch['reason']})")
     return "\n".join(lines)
 
 

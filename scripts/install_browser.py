@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the Chromium build that this tool's Playwright version expects.
+"""Get a browser this tool can launch, reusing an installed Chrome when there is one.
 
 Why a dedicated command
 -----------------------
@@ -7,15 +7,26 @@ Why a dedicated command
 browser BINARIES, which live in a cache of their own. So a freshly installed tool
 has no browser and the first launch fails with "Executable doesn't exist".
 
-Why it installs into the tool's OWN directory
----------------------------------------------
-Measured on a real machine, Playwright's shared cache had grown to 1374 MB holding
+Two ways to get one
+-------------------
+1. **An installed Chrome/Edge** (detected, nothing downloaded). Measured on a real
+   machine with Chrome 157 and Playwright 1.60: `launch_persistent_context` with
+   `executable_path` works headless and headed, runs the site's Vue code, and can
+   share one profile directory with the bundled build in either direction.
+   Reusing it costs 0 bytes instead of ~683 MB.
+2. **The tool's own chromium build**, downloaded into `~/.elang/browsers`.
+   Self-contained and version-matched to the Playwright that runs it.
+
+The default is: use whatever is already available, prefer the bundled build, and
+only download when neither exists. `--bundled` forces the download.
+
+Why the tool's own directory by default
+---------------------------------------
+Measured on a real machine: Playwright's shared cache had grown to 1374 MB holding
 two generations of chromium (1217 and 1223, each with a full and a headless-shell
 build), because different Playwright versions share one directory. Installing into
-`~/.elang/browsers` keeps this tool self-contained and bounded.
-
-`--shared` installs into Playwright's shared cache instead, which reuses whatever
-is already there at the cost of that shared-directory growth.
+`~/.elang/browsers` keeps this tool self-contained and bounded. `--shared` uses
+the shared cache instead, to reuse whatever is already there.
 
 Why `--no-shell` is NOT used
 ----------------------------
@@ -25,8 +36,10 @@ every headless launch fail with a missing `chrome-headless-shell.exe` — verifi
 the hard way. Both are installed.
 
 Usage:
-    python scripts/install_browser.py             # into the tool's own cache
-    python scripts/install_browser.py --shared    # into Playwright's shared cache
+    python scripts/install_browser.py             # reuse what exists, else download
+    python scripts/install_browser.py --bundled   # always use the tool's own build
+    python scripts/install_browser.py --shared    # download into Playwright's cache
+    python scripts/install_browser.py --force     # reinstall even when usable
     python scripts/install_browser.py --check     # report only
 """
 import argparse
@@ -42,6 +55,9 @@ import config  # noqa: E402
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--bundled", "--download", dest="bundled", action="store_true",
+                    help="install the tool's own chromium build even when an "
+                         "installed Chrome/Edge could be reused")
     ap.add_argument("--shared", action="store_true",
                     help="install into Playwright's shared cache instead of the "
                          "tool's own (reuses what is already there)")
@@ -53,27 +69,53 @@ def main():
     print("-- browser situation --")
     print("  " + config.describe_browser().replace("\n", "\n  "))
 
-    usable = config.has_browser()
+    choice = config.browser_choice()
 
     if args.check:
-        if usable:
-            print("\n  OK: a browser build is available.")
-            return 0
-        print("\n  MISSING: no chromium build found.")
-        print("  Install it with:  elang install-browser")
-        return 1
+        if choice["mode"] == "none":
+            print("\n  MISSING: no browser found.")
+            print("  Install one with:  elang install-browser")
+            return 1
+        print(f"\n  OK: {choice['mode']} browser available")
+        print(f"      {choice['label']}"
+              f"{' v' + choice['version'] if choice['version'] else ''}")
+        print(f"      ({choice['reason']})")
+        return 0
+
+    # An installed Chrome/Edge means zero download. Say so once, and explain how
+    # to get the bundled build instead — silently preferring a system browser
+    # would be surprising, so the reason is always printed.
+    if choice["mode"] == "system" and not args.bundled:
+        version = f" v{choice['version']}" if choice["version"] else ""
+        print(f"\n  Reusing the installed browser: {choice['label']}{version}")
+        print(f"  {choice['path']}")
+        print(f"  ({choice['reason']})")
+        print("\n  Nothing to download.")
+        print("  To install the tool's own chromium build instead:")
+        print("     elang install-browser --bundled")
+        return 0
 
     # `--force` means "install into the chosen directory even if one is usable".
     # Without it, an existing usable build is reused and nothing is downloaded —
     # the shared cache on a real machine already held a matching build, so
     # re-downloading ~683 MB would have been pure waste.
-    if usable and not args.force:
+    if config.has_browser() and not args.force:
         print("\n  Already usable — nothing to install.")
         print("  (use --force to install a second copy anyway, "
               "e.g. to make this tool self-contained)")
         return 0
 
-    target = config.shared_browsers_dir() if args.shared else config.BROWSERS_DIR
+    # Where to put the build. An explicit PLAYWRIGHT_BROWSERS_PATH wins, because
+    # that is where Playwright will look later; otherwise --shared or the private
+    # cache. Honouring the variable prevents an install that the next run cannot
+    # see.
+    override = (os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "").strip()
+    if override and override != "0":
+        target = Path(override)
+    elif args.shared:
+        target = config.shared_browsers_dir()
+    else:
+        target = config.BROWSERS_DIR
     print(f"\n-- installing chromium into {target} --")
     target.mkdir(parents=True, exist_ok=True)
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(target)

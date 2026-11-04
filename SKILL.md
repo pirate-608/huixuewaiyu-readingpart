@@ -37,9 +37,10 @@ description: Automate English reading exercises on 慧学外语 (elang.zju.edu.c
 
 **2. 浏览器不要预设版本或路径**
 
-需要哪个构建取决于 Playwright 版本，写死会过时。
+浏览器由工具自己选：自带 Chromium 优先，没有自带构建时复用系统 Chrome / Edge，
+也可以用 `ELANG_BROWSER=chrome|msedge|chromium` 固定。不要写死某个路径。
 **先跑 `elang doctor`**；缺失时装：`elang install-browser`
-（默认装到工具私有缓存 `~/.elang/browsers`，已有可用构建时什么都不做）。
+（装了 Chrome/Edge 会直接复用，不下载；`--bundled` 才强制下载，约 683 MB）。
 
 **3. 不要阻塞等待**
 
@@ -66,7 +67,7 @@ elang doctor
 | 输出 | 行动 |
 |---|---|
 | `elang: command not found` | 未安装。参见下文安装一节，或请用户先行安装 |
-| `browser ... FAILED` | `elang install-browser`（网络/TLS 报错直接重试） |
+| `browser ... FAILED` | `elang install-browser`（需要下载时报网络/TLS 错误就重试） |
 | 报 `EPERM` / `mkdtemp` | 把 `TEMP`/`TMP` 指向可写目录再试（doctor 会提示） |
 | `env file ... (missing)` | `elang init-env` 生成模板，然后**让用户自己填密码** |
 | `username/password ... missing` | 请用户填写 `.env`，**不要**把密码写进日志或对话 |
@@ -237,7 +238,7 @@ CAS 自动登录（.env 凭据）
 
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
-elang install-browser        # uv 只装 Python 环境，不装浏览器二进制
+elang install-browser        # uv 只装 Python 环境；这一步复用 Chrome/Edge 或下载 Chromium
 elang init-env               # 生成 .env 模板
 elang doctor                 # 到这一步应为 All good.
 ```
@@ -254,7 +255,7 @@ elang install-skill --agent <dsh|codex|claude> --scope <global|project>
 
 - Python 3.11+
 - `uv`（安装工具用）
-- Chromium（`elang install-browser` 负责）
+- 浏览器（`elang install-browser` 负责：复用已装 Chrome / Edge，或安装 Chromium）
 - ZJU CAS 账号
 
 **不要**把依赖装进系统 Python，也不要用 `--system-site-packages` 借用系统包，

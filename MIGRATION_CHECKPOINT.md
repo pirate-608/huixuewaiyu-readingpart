@@ -3570,3 +3570,80 @@ force push、排除了哪些替代方案、影响范围（只涉及学号与路�
    （每个克隆启用一次：`git config core.hooksPath .githooks`）
 
 最终状态：远端全新克隆复查，**全部 39 个提交 0 命中**。
+
+---
+
+## 46. ✅ 浏览器复用：已经装了 Chrome/Edge 就不再下载（实测）
+
+### 46.1 问题
+
+首次运行的代价是下载约 683 MB（chromium + chrome-headless-shell）。很多机器
+本来就有 Chrome 或 Edge，这份下载纯属浪费。原实现只有 `ELANG_BROWSER=msedge`
+这一条"逃生口"，且文档把它描述成可能有副作用的选择。
+
+### 46.2 实测：系统浏览器能否启动、能否共用 profile
+
+环境：Playwright 1.60，自带 chromium 1223（UA 里是 Chrome 148）。
+
+| 组合 | headless | 有头 | 页面加载 + `evaluate` |
+|---|---|---|---|
+| 自带 chromium | ✅ | ✅ | ✅ |
+| `channel=chrome`（Chrome 157） | ✅ | ✅ | ✅ |
+| `channel=msedge`（Edge 156） | ✅ | ✅ | ✅ |
+| `executable_path=<chrome.exe>` | ✅ | ✅ | ✅ |
+
+profile 目录能否在两者之间复用（同一目录先后启动）：
+
+| 顺序 | 结果 |
+|---|---|
+| Chrome 157 建 profile → chromium 148 打开 | ✅ |
+| chromium 148 建 profile → Chrome 157 打开 | ✅ |
+| Chrome 157 → Chrome 157 | ✅ |
+
+既然双向都能打开，就不需要按浏览器分 profile 目录。这也意味着会话文件
+（`elang_session.json`）不用跟着浏览器走。
+
+### 46.3 ⚠️ 更正第 4 节坑 4 与第 22 节的结论
+
+旧结论是"`channel="msedge"` 会让 Edge 拒绝启动（不受支持的命令行标志）"。
+本轮重测：**`channel="msedge"` 本身没问题**，问题出在当时的调用方式——
+给 `launch()` 传了额外命令行参数。`launch_persistent_context` 不传那些参数，
+Edge 与 Chrome 都正常。旧文档把"渠道"与"参数组合"混为一谈了。
+
+### 46.4 实现
+
+唯一的决定处是 `config.browser_choice()`，优先级：
+
+| 顺序 | 来源 | 说明 |
+|---|---|---|
+| 1 | `ELANG_BROWSER` | `chromium`/`bundled`；`chrome`/`msedge`；可执行文件路径；其他值原样当 channel |
+| 2 | 自带 Chromium | 默认，自包含，与运行它的 Playwright 版本匹配 |
+| 3 | 已装 Chrome / Edge | 没有自带构建时用它，省掉下载 |
+| 4 | 无 | 报错并给出两条修法 |
+
+要点：
+
+- **探测自己找路径，不靠 Playwright 的 registry 查找。** 顺序是注册表 App Paths、
+  常见安装位置、PATH（Windows/macOS/Linux 各一套），找到可执行文件后传
+  `executable_path`，这样 scoop、便携版、tarball 安装也能用；只有用户点名了一个
+  找不到的 channel 时才原样透传 `channel=`。
+- **版本自己读。** Windows 上 `chrome.exe --version` 因为进程脱离控制台拿不到输出
+  （实测输出为空），改为读 PE 版本资源；macOS/Linux 直接跑 `--version`。
+- **`install-browser` 默认"先复用、再下载"**：有构建什么都不做；没构建但有
+  Chrome/Edge 就打印用的是哪一个并退出，不联网；两者都没有才下载。
+  `--bundled` 强制下载，`--shared` 装到共享缓存，`--check` 只报告。
+- **`doctor.py` 报告并真的启动"实际会用的那一个"**，不再固定检查自带构建的路径，
+  否则复用系统浏览器时会被误报为 FAILED。
+- **`PLAYWRIGHT_BROWSERS_PATH` 优先**：装了构建却装在别处等于没装，所以下载目标
+  跟随这个变量。
+
+### 46.5 测试
+
+`scripts/test_browser_choice.py`（23 项，不启动浏览器）：覆盖四类显式指定、
+自动优先级、launch kwargs、探测与版本读取。本机结果 23/23。
+
+### 46.6 未完成
+
+干净环境下的完整验证（新 wheel → 隔离安装 → `doctor` → `install-browser` →
+真实登录跑一篇 `--dry-run`）在下一节记录。
+
