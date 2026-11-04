@@ -1,0 +1,6 @@
+# Line endings are fixed for the shell scripts. The repo is developed on Windows,
+# where core.autocrlf=true would otherwise check `.githooks/*` out with CRLF and
+# break the shebang, so the privacy guard would silently stop running.
+.gitattributes text=auto
+/.githooks/* text eol=lf
+*.sh text eol=lf

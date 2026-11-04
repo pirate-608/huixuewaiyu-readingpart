@@ -6,7 +6,7 @@
 
 This file provides guidance to coding agents working in this repository.
 
-> ## ⚠️ 四条必须记住的规则
+> ## ⚠️ 五条必须记住的规则
 >
 > **1. 不要阻塞等待。** MCP 模式下没有任何 tool 会等待，每步立即返回状态
 > 与可执行的下一步。用"挂着等输出"的方式轮询会让双方互相等待。
@@ -32,7 +32,12 @@ This file provides guidance to coding agents working in this repository.
 >   站点对访问来源有网络限制，重试不会改变结果。
 > - 两类失败都不要连续重试。先判断网络状态，再决定下一步。
 >
-> 这条规则不针对某台机器，任何参与本项目开发的人都适用。
+> 这些规则不针对某台机器，任何参与本项目开发的人都适用。
+>
+> **5. 只支持 Windows，不要做跨平台兼容。** 目标用户是 Windows 桌面上的慧学外语
+> 使用者，Linux / macOS 没有实测环境，不值得为此投入。不补功能、不修 bug、
+> 不加平台分支；代码里已有的 POSIX 分支（`/tmp`、symlink、chmod）保留即可，
+> 不构成承诺，也不要扩展。
 >
 > 改动代码前请读 [`CHANGELOG.md`](CHANGELOG.md)：
 > 那里有实测事实、被推翻的假设和踩过的坑。
@@ -260,6 +265,7 @@ git config core.hooksPath .githooks
 
 ## Requirements
 
+- **Windows 10/11（64 位）**，只支持这一个平台
 - Python 3.11+
 - `uv`（推荐）
 - 浏览器：自带 Chromium，或系统 Chrome / Edge（`doctor.py` 报告）

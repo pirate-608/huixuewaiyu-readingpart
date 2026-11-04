@@ -26,7 +26,15 @@ agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板�
 - **已完成跳过**：使用应用自身的 `normalizeStatus` 判断，与界面显示一致
 - **零阻塞作答**：MCP 工具每步立即返回状态，不需要超时协商
 - **自我诊断**：`elang doctor` 报告环境、浏览器与凭据状态，并给出修复命令
-- **跨平台**：Windows / Linux / macOS
+
+## 支持范围
+
+**本工具只支持 Windows 10/11（64 位）。** 目标用户是在 Windows 桌面上使用慧学外语的人，
+其他平台不在支持范围。
+
+- 浏览器、验证码、路径与沙箱相关的行为都只在 Windows 上实测过
+- Linux 与 macOS 没有实测环境，也不为它们做兼容或修 bug
+- 代码里保留的少量 POSIX 分支（`/tmp`、symlink、chmod）是顺手写的，不构成承诺
 
 ## 三个独立产物
 
@@ -315,6 +323,7 @@ python scripts/doctor.py
 
 ## 依赖
 
+- Windows 10/11（64 位）
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)，用于安装工具（推荐）
 - 浏览器：`elang install-browser` 复用已装的 Chrome / Edge，或安装自带的 Chromium
@@ -322,16 +331,8 @@ python scripts/doctor.py
 
 **没有 `uv` 时**，用官方安装脚本，装完重开终端（安装器改的是用户 PATH）：
 
-Windows（PowerShell）：
-
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-macOS / Linux：
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 这一步要访问外网（GitHub、`astral.sh`），通常需要代理。如果让 agent 代装，

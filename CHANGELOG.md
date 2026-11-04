@@ -3733,4 +3733,55 @@ profile 因为指向工作区而不受影响）。后果是每次都要重新 CA
 现在改成自建 venv（`python -m venv .venv` + `pip install -r requirements.txt`），
 再从仓库运行 `scripts/elang_reader.py`。
 
+---
+
+## 49. 支持范围定案：只支持 Windows
+
+README 的特性列表原来写着"跨平台：Windows / Linux / macOS"，但项目从头到尾只在
+Windows 上实测过。为了判断这句话站不站得住，做了一次审查，含 WSL Ubuntu 24.04
+上的实测。
+
+**纯 Python 部分在 Linux 上能用**：
+
+- `config.ipc_dir()` → `/tmp`；共享浏览器缓存 → `~/.cache/ms-playwright`
+- 无浏览器时 `browser_choice()` 正确返回 `none`
+- `install-browser --check`、`answer_ipc pending`、`install-skill --check`、
+  CLI 入口都正常
+- `.env` 模板权限 0600（POSIX 的 chmod 分支生效）
+- env_names 19/19、answer_ipc 20/20、browser_choice 20/20、doc_roles 37/37、
+  docs_match_code 19/19、no_secrets 8/8
+- 但 `test_setup_mcp.py` 直接失败：它写死 `.venv/Scripts/python.exe`（Windows 路径）
+
+**挡住 Linux 的是运行环境，不是 Python 代码**：
+
+1. `open_browser()` 硬编码 `headless=False`，`ElangSession` 的 `headless` 参数
+   只存不用。Linux 服务器、容器、CI 没有显示服务，启动即失败。
+2. `install-browser` 只跑 `playwright install chromium`，Linux 最小安装缺
+   `libnss3` 等系统库，需要 `playwright install --with-deps chromium`（要 root）。
+3. Ubuntu 23.10+ 默认限制非特权 user namespace，chromium 沙箱可能起不来，
+   常规解法是 `--no-sandbox`，而代码没有传浏览器参数的入口。
+
+macOS 从未实测；静态看没有阻碍项，但"静态看没问题"不等于可用。WSL 里安装浏览器
+时下载卡住三分钟，按用户要求中止（WSL 内的系统代理不生效）。
+
+**结论：只支持 Windows，不为 Linux / macOS 做兼容。** 目标用户是在 Windows 桌面
+上使用慧学外语的人，移植成本（有头浏览器、系统库、沙箱、无 CI）换不来实际价值，
+半成品移植只会让文档说谎。
+
+落地：
+
+- README 增加"支持范围"一节，删掉"跨平台"特性条目与 macOS/Linux 的 uv 安装命令；
+  依赖列表加上 Windows 10/11
+- `SKILL.md`、`SETUP.md` 声明只支持 Windows，删掉其他平台的 uv 命令
+- `AGENTS.md` / `CLAUDE.md` 增加第 5 条规则：只支持 Windows，不要做跨平台兼容
+- `pyproject.toml` 的 classifier 从 `OS Independent` 改为 `Microsoft :: Windows`
+- 新增 `.gitattributes` 固定 `.githooks/*` 与 `*.sh` 的 LF，并给 `pre-commit`
+  补上可执行位。这两项 Windows 也需要：`core.autocrlf=true` 会把 hook 签出成
+  CRLF，shebang 失效，隐私守卫就静默不跑了
+- `test_docs_match_code.py` 增加 4 项检查：README 必须写明"只支持 Windows"、
+  文档不得再宣传跨平台、开发指引必须保留禁令、包元数据必须是 Windows
+
+代码里的 POSIX 分支（`/tmp`、symlink、chmod、macOS/Linux 浏览器探测）不删：
+它们不影响 Windows，删掉反而增加回归风险；但也不构成承诺，不作为修 bug 的目标。
+
 

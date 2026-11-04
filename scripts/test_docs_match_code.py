@@ -141,6 +141,26 @@ for doc in ("README.md", "SKILL.md"):
     check(f"{doc} states 11 subjects", re.search(r"11\s*个", text) is not None)
     check(f"{doc} states 220 articles", "220" in text)
 
+print("\n=== the supported platform is stated, not promised broadly ===")
+# The tool is Windows-only on purpose (AGENTS.md rule 5). README used to promise
+# "Windows / Linux / macOS" while every measurement had been made on Windows, so
+# pin the honest statement: a Windows scope plus no cross-platform advertising.
+def _claims_cross_platform(text):
+    """True if a doc advertises cross-platform support (the rule forbidding it is fine)."""
+    return any("跨平台" in line and "不要做跨平台兼容" not in line
+               for line in text.splitlines())
+
+
+check("README states Windows-only support", "只支持 Windows" in read("README.md"))
+check("no document promises cross-platform support",
+      not any(_claims_cross_platform(read(d)) for d in DOCS))
+check("the development guides forbid porting work",
+      "不要做跨平台兼容" in read("AGENTS.md"))
+toml = read("pyproject.toml")
+check("package metadata is Windows-only",
+      "Operating System :: Microsoft :: Windows" in toml
+      and "OS Independent" not in toml)
+
 print("\n=== archive/ stays out of the repository ===")
 tracked = subprocess.run(["git", "ls-files", "archive"], cwd=str(REPO),
                          capture_output=True, text=True).stdout.strip()

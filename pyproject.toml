@@ -12,7 +12,10 @@ license = { text = "MIT" }
 keywords = ["playwright", "automation", "elang", "zju", "mcp"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Operating System :: OS Independent",
+  # Windows only, deliberately: the browser automation, the IPC defaults, the
+  # sandbox notes and every measurement behind them were made on Windows. Do
+  # not advertise Linux/macOS without testing them (see AGENTS.md rule 5).
+  "Operating System :: Microsoft :: Windows",
 ]
 
 # Only what is needed to RUN. The teaching/docs files (CLAUDE.md,

@@ -6,6 +6,9 @@
 
 你正在帮用户安装配置 **huixuewaiyu-readingpart**（慧学外语阅读自动答题工具）。
 
+**支持范围：Windows 10/11（64 位）。** 其他平台不在支持范围，遇到非 Windows
+环境直接告诉用户，不要尝试移植。
+
 **请严格按顺序执行，每步验证通过再进入下一步。**
 遇到失败：把**原始错误**报告给用户，不要跳过、不要假装成功。
 
@@ -68,16 +71,8 @@ elang list
 **若 `uv` 不存在**：不要未经询问就安装。把下面的安装命令给用户看，
 **得到明确同意后再执行**。装 uv 是系统级改动：它会写入用户目录并修改 PATH。
 
-Windows（PowerShell）：
-
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-macOS / Linux：
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 - 安装脚本从 `astral.sh` 下载，需要外网；此步属于"需要代理"的那一类，失败不要连续重试。
