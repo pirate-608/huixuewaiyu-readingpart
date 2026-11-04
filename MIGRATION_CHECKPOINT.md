@@ -3642,8 +3642,34 @@ Edge 与 Chrome 都正常。旧文档把"渠道"与"参数组合"混为一谈了
 `scripts/test_browser_choice.py`（23 项，不启动浏览器）：覆盖四类显式指定、
 自动优先级、launch kwargs、探测与版本读取。本机结果 23/23。
 
-### 46.6 未完成
+### 46.6 干净环境验证（已实测）
 
-干净环境下的完整验证（新 wheel → 隔离安装 → `doctor` → `install-browser` →
-真实登录跑一篇 `--dry-run`）在下一节记录。
+做法：`uv build` 出 wheel → 用独立的 `UV_TOOL_DIR` / `UV_TOOL_BIN_DIR` 安装
+（不碰本机已有安装）→ 工作目录、IPC、profile、浏览器缓存全部换成工作区内全新的
+空目录，并让 `PLAYWRIGHT_BROWSERS_PATH` 指向空目录，模拟一台"没有 Chromium
+构建"的机器。
+
+| 检查 | 结果 |
+|---|---|
+| `uv tool install <wheel>` | ✅ 只生成 1 个可执行文件 `elang` |
+| wheel 内容 | ✅ 12 个模块 + `data/answers.json` + `share/` 下 4 份执行文档 |
+| `elang`（无参数） | ✅ 打印用法 |
+| `elang doctor` | ✅ 选中系统 Chrome 157 并启动成功（`launch: ok`） |
+| `elang install-browser --check` | ✅ 退出码 0，报告可用的系统浏览器 |
+| `elang install-browser` | ✅ 打印 "Reusing the installed browser"，**不联网也不下载** |
+| `elang run batch-all --limit 1 --dry-run` | ✅ 用系统 Chrome 完成 CAS 登录；抓到 6 题（5 选择 + 1 填空）、3758 字符文章 |
+| 题库未命中 → agent 作答（CLI 回退） | ✅ `elang pending` 显示题目 → `elang answer 0=A 1=B 2=A 3=B 4=A "5=D,C,B,A,F,G,E"` → 运行端 `answers recorded` → 打开提交确认框但**不提交** |
+| `elang install-skill --copy --scope project` | ✅ 从 wheel 复制 4 份执行文档到两个 DSH 根目录 |
+| `elang setup-mcp --dry-run --host dsh` | ✅ 生成正确的 MCP 条目（`command` 指向隔离安装的 `elang.exe`） |
+| `elang mcp`（stdio 客户端驱动） | ✅ initialize、10 个 tool、`elang_status`=idle、`elang_list_subjects` 启动浏览器并返回 11 个主题 |
+
+这次验证同时覆盖了两件事：**新装工具在没有任何既有状态时可用**，以及
+**装了 Chrome 的机器不需要下载 683 MB**（`PLAYWRIGHT_BROWSERS_PATH` 是空目录，
+`install-browser` 直接复用系统 Chrome）。
+
+一个环境限制，不是工具缺陷：在本会话的 DSH 文件沙箱内，子进程写 `~/.elang/`
+被拒绝（`save_session()` 报 `PermissionError` 后只打印警告并继续，浏览器
+profile 因为指向工作区而不受影响）。后果是每次都要重新 CAS 登录；正常终端里
+没有这个限制，此前几轮实测会话都能保存。需要浏览器和 home 写入的操作应在
+沙箱外执行，这与第 3 条规则一致。
 
