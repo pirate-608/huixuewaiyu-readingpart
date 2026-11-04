@@ -18,7 +18,7 @@
 
 
 Status: **计划中**，尚未实施。
-依据：`MIGRATION_CHECKPOINT.md` 的实测事实 + 当前 `scripts/` 的真实函数表。
+依据：`CHANGELOG.md` 的实测事实 + 当前 `scripts/` 的真实函数表。
 
 ---
 

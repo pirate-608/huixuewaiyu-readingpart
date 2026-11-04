@@ -7,7 +7,7 @@ This project has two agent roles and their documents must not be mixed:
       SKILL.md, SETUP.md, .env.example, README.md   <- shipped with the skill
 
   开发 agent (works on this project)
-      CLAUDE.md, MIGRATION_CHECKPOINT.md, MCP_DESIGN.md, DISTRIBUTION.md,
+      CLAUDE.md, CHANGELOG.md, MCP_DESIGN.md, DISTRIBUTION.md,
       SETUP_DESIGN.md, AGENTS.md                    <- repo only, NEVER shipped
 
 The rule that actually matters: an installed skill directory must not receive
@@ -24,7 +24,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 EXEC_DOCS = {"SKILL.md", "SETUP.md", ".env.example", "README.md"}
 DEV_DOCS = {
-    "CLAUDE.md", "AGENTS.md", "MIGRATION_CHECKPOINT.md", "MCP_DESIGN.md",
+    "CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "MCP_DESIGN.md",
     "DISTRIBUTION.md", "SETUP_DESIGN.md",
 }
 # Forbidden in anything that ships: development-only documents and the deep
@@ -101,7 +101,7 @@ for name in sorted(DEV_DOCS):
     rel = f"]({name})"
     check(f"SKILL.md has no relative link to {name}", rel not in skill)
 check("SKILL.md does not tell the run agent to read the checkpoint log",
-      "MIGRATION_CHECKPOINT" not in skill)
+      "CHANGELOG" not in skill)
 for term in ("PcReadPraxis", "PcReadLearn", "PcReadIndex", "__elangPraxisVm"):
     check(f"SKILL.md omits DOM/Vue internals ({term})", term not in skill)
 

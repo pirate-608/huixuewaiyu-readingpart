@@ -88,7 +88,7 @@ elang install-skill --uninstall --agent claude
 删掉那几行即可选择提交。
 
 **复制模式只带 payload**：`SKILL.md`、`scripts/`、`references/`、`assets/`、
-`requirements.txt`、`CLAUDE.md`、`MIGRATION_CHECKPOINT.md`、`MCP_DESIGN.md`。
+`requirements.txt`、`CLAUDE.md`、`CHANGELOG.md`、`MCP_DESIGN.md`。
 **不带 `.git` / `temp` / `.venv`** —— 这正是仓库根不能直接当 skill 的原因。
 
 **链接模式**（Windows 用 junction，已实测可用）：

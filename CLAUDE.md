@@ -34,7 +34,7 @@ This file provides guidance to coding agents working in this repository.
 >
 > 这条规则不针对某台机器，任何参与本项目开发的人都适用。
 >
-> 改动代码前请读 [`MIGRATION_CHECKPOINT.md`](MIGRATION_CHECKPOINT.md)：
+> 改动代码前请读 [`CHANGELOG.md`](CHANGELOG.md)：
 > 那里有实测事实、被推翻的假设和踩过的坑。
 
 ## Overview

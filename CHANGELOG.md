@@ -1,12 +1,17 @@
-# MIGRATION CHECKPOINT — 慧学外语 PC 版迁移
+# CHANGELOG — 慧学外语 PC 版迁移与后续开发
 
-> **读者：开发 agent**。这是一份**带日期的实测记录**，不是现状说明。
+> **读者：开发 agent**。这是一份**带日期的详细更改历史**，不是现状说明：
+> 每次改动的原因、实测数据、被推翻的假设、踩过的坑都记在这里，比 git 提交信息详细。
 > 执行 agent 看 `SKILL.md`；**本文不随 skill 分发**。
-
+>
+> - 2026-11-04 由 `MIGRATION_CHECKPOINT.md` 改名而来；历史内容未改，
+>   文中出现的旧文件名已统一替换为新名。
+> - 各节按时间顺序追加，**旧结论不删**：被推翻的结论就地标注更正，
+>   这样能看清判断是怎么变的。
+> - 第 1-10 节写于迁移开始时，其中的"现状"只代表当时。
 
 > **给接手的 agent：先读完这份再动手。**
-> 状态：**调查阶段，代码零改动**。仓库与 `HEAD (c34590d)` 完全一致。
-> 最后更新：2026-09-26
+> 最后更新：2026-11-04
 
 ---
 
@@ -1969,7 +1974,7 @@ python scripts/install_skill.py --uninstall
 ```
 
 **复制模式只带 payload**：`SKILL.md`/`scripts/`/`references/`/`assets/`/
-`requirements.txt`/`CLAUDE.md`/`MIGRATION_CHECKPOINT.md`/`MCP_DESIGN.md`。
+`requirements.txt`/`CLAUDE.md`/`CHANGELOG.md`/`MCP_DESIGN.md`。
 **不带 `.git`/`temp`/`.venv`**（已实测验证）。
 
 **链接模式用 Windows junction**（已实测）：
@@ -2421,7 +2426,7 @@ python scripts/init_env.py     # 然后在生成的 .env 里填写学号/密码
 .claude/  archive/  references/  scripts/
 .env (真实凭据，已 gitignore)      .env.example
 .gitignore  .mcp.json (生成物，已忽略)  .mcp.json.example
-CLAUDE.md  DISTRIBUTION.md  MCP_DESIGN.md  MIGRATION_CHECKPOINT.md
+CLAUDE.md  DISTRIBUTION.md  MCP_DESIGN.md  CHANGELOG.md
 README.md  SKILL.md  LICENSE  requirements.txt
 ```
 
@@ -2652,7 +2657,7 @@ PAYLOAD = [
     "references/parse_answers.py",
     ".env.example",             # 凭据模板
     "CLAUDE.md",                # 面向 agent 的指引
-    "MIGRATION_CHECKPOINT.md",  # 实测事实与坑
+    "CHANGELOG.md",  # 实测事实与坑
     "MCP_DESIGN.md",
     "DISTRIBUTION.md",
     "scripts",                  # 仓库检出时的独立回退
@@ -2699,7 +2704,7 @@ REPO = parent.parent → ...\site-packages\Lib     ← 不是仓库！
 ```
 "SKILL.md" = "elang/share/SKILL.md"
 ".env.example" = "elang/share/.env.example"
-"CLAUDE.md" / "MIGRATION_CHECKPOINT.md" / "MCP_DESIGN.md" / "DISTRIBUTION.md"
+"CLAUDE.md" / "CHANGELOG.md" / "MCP_DESIGN.md" / "DISTRIBUTION.md"
 "references/parse_answers.py" = "elang/share/parse_answers.py"
 ```
 
@@ -2708,7 +2713,7 @@ REPO = parent.parent → ...\site-packages\Lib     ← 不是仓库！
 ```
 (1 missing: scripts)   ← 诚实报告：scripts/ 只存在于仓库检出
 复制成功：.env.example、CLAUDE.md、DISTRIBUTION.md、MCP_DESIGN.md、
-          MIGRATION_CHECKPOINT.md、SKILL.md、references/（2 文件）
+          CHANGELOG.md、SKILL.md、references/（2 文件）
 ```
 
 PAYLOAD 也从字符串列表改成 `(source_key, dest_rel)` 对，因为来源与目标现在不同。
@@ -3268,7 +3273,7 @@ e0457d0  feat(cli): make `elang run` a real fallback — the agent answers it
 | `MCP_DESIGN.md` | 加**状态头**：它是设计记录不是现状，"目标态（IPC 退休）"已被推翻 |
 | `SETUP.md` | `elang list` 的期望输出补上答题动词 |
 
-**`MIGRATION_CHECKPOINT.md` 不改** —— 它是带日期的历史记录，改它等于篡改结论。
+**`CHANGELOG.md` 不改** —— 它是带日期的历史记录，改它等于篡改结论。
 
 ### 42.4 顺带修正架构不一致
 
@@ -3310,19 +3315,19 @@ skill payload 里还带着 `scripts/` 和 `references/`，这与新 SKILL.md
 `elang install-skill` 把下面这些**一股脑复制进执行 agent 的 skill 目录**：
 
 - `CLAUDE.md`（开发指南）
-- `MIGRATION_CHECKPOINT.md`（**2355 行**实测日志）
+- `CHANGELOG.md`（**2355 行**实测日志）
 - `MCP_DESIGN.md`（设计记录）
 - `DISTRIBUTION.md`（分发设计）
 
 而 `SKILL.md` 本身也混着开发内容：站点组件表、Vue 序列化陷阱、
-"改代码前读 MIGRATION_CHECKPOINT"。
+"改代码前读 CHANGELOG"。
 
 ### 43.2 约定
 
 | 角色 | 用途 | 文档 | 随 skill 分发 |
 |---|---|---|---|
 | **执行 agent** | 跑 skill 答题 | `SKILL.md`、`SETUP.md`、`.env.example`、`README.md` | ✅ |
-| **开发 agent** | 开发 / 调试本项目 | `CLAUDE.md`、`MIGRATION_CHECKPOINT.md`、`MCP_DESIGN.md`、`DISTRIBUTION.md`、`SETUP_DESIGN.md`、`archive/` | ❌ |
+| **开发 agent** | 开发 / 调试本项目 | `CLAUDE.md`、`CHANGELOG.md`、`MCP_DESIGN.md`、`DISTRIBUTION.md`、`SETUP_DESIGN.md`、`archive/` | ❌ |
 
 **规则**：
 
@@ -3365,7 +3370,7 @@ skill payload 里还带着 `scripts/` 和 `references/`，这与新 SKILL.md
 SKILL.md 269 行
 有「读者：执行 agent」 : True
 有 DOM/Vue 内部细节    : False
-有 MIGRATION_CHECKPOINT : False
+有 CHANGELOG : False
 有 elang pending        : True
 ```
 
@@ -3466,7 +3471,7 @@ CAS 隐私数据。
 |---|---|
 | API key / 私钥 / token | ✅ 无 |
 | `.env` 是否曾提交 | ✅ 从未（`.env.example` 只是模板） |
-| **真实学号** | 🔴 **2 处**（`MIGRATION_CHECKPOINT.md`） |
+| **真实学号** | 🔴 **2 处**（`CHANGELOG.md`） |
 | **含用户名的本机路径** | 🔴 **5 处**（`C:\Users\<user>\…`） |
 | **本地仓库路径** | 🔴 **3 处**（开发者的本地检出目录） |
 
@@ -3672,4 +3677,21 @@ Edge 与 Chrome 都正常。旧文档把"渠道"与"参数组合"混为一谈了
 profile 因为指向工作区而不受影响）。后果是每次都要重新 CAS 登录；正常终端里
 没有这个限制，此前几轮实测会话都能保存。需要浏览器和 home 写入的操作应在
 沙箱外执行，这与第 3 条规则一致。
+
+---
+
+## 47. 文档改名：`MIGRATION_CHECKPOINT.md` → `CHANGELOG.md`
+
+这份记录的作用已经变了。它不再是"迁移进度检查点"，而是每次改动的详细历史：
+比 git 提交信息多出实测数据、被推翻的假设、踩过的坑和判断依据。名字跟上职责，
+改为 `CHANGELOG.md`。
+
+- 历史内容不改，只把文中出现的旧文件名统一替换为新名。
+- 外部引用同步更新：`AGENTS.md`/`CLAUDE.md`、`README.md` 的文档表、
+  `DISTRIBUTION.md`、`MCP_DESIGN.md`、`SECURITY.md`、`pyproject.toml` 注释，
+  以及 `scripts/` 里的注释和 `test_doc_roles.py`、`test_no_secrets.py` 的提示。
+- 顶部补了三条约定：按时间追加、旧结论不删、被推翻的结论就地更正。
+- `test_docs_match_code.py` 的 `DOCS` 列表**故意不包含**本文件：它记录历史
+  命令，按设计允许出现过时命令，纳入自动检查只会误报。
+
 

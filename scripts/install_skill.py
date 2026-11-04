@@ -79,7 +79,7 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 #
 # This project has two audiences and they must not be mixed:
 #   * 执行 agent (runs the skill to answer questions) -> SKILL.md, SETUP.md
-#   * 开发 agent (works on this project)              -> CLAUDE.md, MIGRATION_CHECKPOINT.md,
+#   * 开发 agent (works on this project)              -> CLAUDE.md, CHANGELOG.md,
 #                                                        MCP_DESIGN.md, DISTRIBUTION.md,
 #                                                        SETUP_DESIGN.md
 # Development docs deliberately do NOT ship: an answering agent has no use for a
@@ -99,7 +99,7 @@ PAYLOAD = [
 # Files packaged under `elang/share/` (see pyproject force-include).
 _SHARE_FILES = {
     "SKILL.md", "README.md", "SETUP.md", ".env.example", "CLAUDE.md",
-    "MIGRATION_CHECKPOINT.md", "MCP_DESIGN.md", "DISTRIBUTION.md",
+    "CHANGELOG.md", "MCP_DESIGN.md", "DISTRIBUTION.md",
     "references/parse_answers.py",
 }
 
