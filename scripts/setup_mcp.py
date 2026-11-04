@@ -37,7 +37,7 @@ Notes
 The server must run OUTSIDE a file sandbox: Playwright reaches its driver through
 `asyncio.create_subprocess_exec`, which needs a NAMED pipe on Windows, and
 confined sandboxes deny `CreateFile("\\\\.\\pipe\\...")` with WinError 5. Measured,
-and the sync API behaves the same. See MCP_DESIGN.md §7.1.
+and the sync API behaves the same. See CHANGELOG.md §24.
 """
 import argparse
 import datetime

@@ -18,7 +18,7 @@ Design notes
   driver transport goes through `asyncio.create_subprocess_exec`, which needs a
   NAMED pipe on Windows, and the sandbox denies `CreateFile("\\\\.\\pipe\\...")`
   with WinError 5. The sync API is no different (it wraps asyncio). See
-  MCP_DESIGN.md §7.1 / CHANGELOG.md §24.
+  CHANGELOG.md §24.
 
 Run:
     python scripts/elang_mcp.py            # stdio transport (normal MCP)

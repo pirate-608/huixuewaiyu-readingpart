@@ -7,8 +7,8 @@ This project has two agent roles and their documents must not be mixed:
       SKILL.md, SETUP.md, .env.example, README.md   <- shipped with the skill
 
   开发 agent (works on this project)
-      CLAUDE.md, CHANGELOG.md, MCP_DESIGN.md, DISTRIBUTION.md,
-      SETUP_DESIGN.md, AGENTS.md                    <- repo only, NEVER shipped
+      CLAUDE.md, CHANGELOG.md, DISTRIBUTION.md,
+      AGENTS.md                                     <- repo only, NEVER shipped
 
 The rule that actually matters: an installed skill directory must not receive
 development documents. Before this split it received a 2000+ line development
@@ -24,8 +24,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 EXEC_DOCS = {"SKILL.md", "SETUP.md", ".env.example", "README.md"}
 DEV_DOCS = {
-    "CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "MCP_DESIGN.md",
-    "DISTRIBUTION.md", "SETUP_DESIGN.md",
+    "CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "DISTRIBUTION.md",
 }
 # Forbidden in anything that ships: development-only documents and the deep
 # implementation notes that belong in CLAUDE.md.

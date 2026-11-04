@@ -17,7 +17,7 @@ This module turns the same primitives into an explicit state machine:
 That single change removes the timeout dance: an article can sit in
 `awaiting_answers` indefinitely because no one is blocked on it.
 
-This is Level 1 of the MCP plan (see MCP_DESIGN.md §3): it needs no MCP
+This is Level 1 of the MCP plan (see CHANGELOG.md §27): it needs no MCP
 dependency, and the eventual MCP server becomes a thin wrapper that exposes these
 same methods as tools.
 

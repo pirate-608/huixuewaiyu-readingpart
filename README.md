@@ -384,9 +384,7 @@ zjuam.zju.edu.cn
 | [`AGENTS.md`](AGENTS.md) | 同一份开发指引的副本，供读取 AGENTS.md 的宿主 |
 | [`SECURITY.md`](SECURITY.md) | 一次历史重写的说明与隐私约定 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 详细更改历史：实测记录、被推翻的假设与已知问题，按时间追加 |
-| [`MCP_DESIGN.md`](MCP_DESIGN.md) | MCP 化设计记录 |
 | [`DISTRIBUTION.md`](DISTRIBUTION.md) | 三平台分发与注册方式 |
-| [`SETUP_DESIGN.md`](SETUP_DESIGN.md) | 一键配置流程的设计依据 |
 
 ## License
 

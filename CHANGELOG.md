@@ -3809,4 +3809,25 @@ macOS 从未实测；静态看没有阻碍项，但"静态看没问题"不等于
 
 第 49 节（只支持 Windows）与 `.gitattributes` 的改动不受影响。
 
+---
+
+## 51. 归档两份设计文档
+
+`MCP_DESIGN.md` 与 `SETUP_DESIGN.md` 属于历史开发文档：它们记录的是设计当时的
+推演，内容已被 `CHANGELOG.md`（§24 MCP 可行性、§27 状态机、§28 MCP server、
+§39 一键配置）与现行的 `SKILL.md` / `SETUP.md` / `CLAUDE.md` 覆盖。继续维护
+等于把同一件事写三遍，容易出现互相矛盾的版本。
+
+处理：
+
+- 两份文件移入本地的 `archive/design-docs/`（`archive/` 一直是不入库的本地归档），
+  从仓库移除；git 历史里仍可追溯
+- 清除引用：README 的文档表、`DISTRIBUTION.md` 的 payload 说明、`pyproject.toml`
+  注释、`install_skill.py` 的文档清单，以及 `elang_mcp.py` / `elang_session.py` /
+  `setup_mcp.py` 里指向 `MCP_DESIGN.md` 的注释，统一改为指向 `CHANGELOG.md` 的对应节
+- `test_doc_roles.py` 的 `DEV_DOCS` 同步删掉这两个名字（该测试要求列入的文档存在
+  并带读者 banner）
+- `install_skill.py` 里顺带删掉一个从未被引用的 `_SHARE_FILES` 常量，它列的是
+  早期"开发文档也进 share/"时期的文件名
+
 

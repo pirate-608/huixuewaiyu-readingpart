@@ -80,8 +80,7 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 # This project has two audiences and they must not be mixed:
 #   * 执行 agent (runs the skill to answer questions) -> SKILL.md, SETUP.md
 #   * 开发 agent (works on this project)              -> CLAUDE.md, CHANGELOG.md,
-#                                                        MCP_DESIGN.md, DISTRIBUTION.md,
-#                                                        SETUP_DESIGN.md
+#                                                        DISTRIBUTION.md
 # Development docs deliberately do NOT ship: an answering agent has no use for a
 # design log, and before this split its skill directory received 2000+ lines of
 # development history.
@@ -95,13 +94,6 @@ PAYLOAD = [
     (".env.example", ".env.example"),  # credential template
     ("README.md", "README.md"),        # human/user overview
 ]
-
-# Files packaged under `elang/share/` (see pyproject force-include).
-_SHARE_FILES = {
-    "SKILL.md", "README.md", "SETUP.md", ".env.example", "CLAUDE.md",
-    "CHANGELOG.md", "MCP_DESIGN.md", "DISTRIBUTION.md",
-    "references/parse_answers.py",
-}
 
 HOME = Path(os.path.expanduser("~"))
 
