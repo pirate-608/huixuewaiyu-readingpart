@@ -1,0 +1,96 @@
+name: Mirror to Gitee
+
+# GitHub is the source of truth; Gitee holds a read-only copy so that `uv` can
+# install the tool from a domestic git URL:
+#
+#     uv tool install git+https://gitee.com/<user>/huixuewaiyu-readingpart.git
+#
+# One-time setup (the operations are listed in CHANGELOG.md, section 52):
+#
+#   Secrets  GITEE_USER            Gitee login name (not the display name)
+#   Secrets  GITEE_TOKEN           Gitee private token with the `projects` scope
+#   Variable GITEE_MIRROR_ENABLED  set to `true` once the two secrets exist
+#   Variable GITEE_REPO            optional, defaults to this repository's name
+#
+# The job stays skipped until GITEE_MIRROR_ENABLED is set, so a half-configured
+# repository does not paint a red X on every push. A manual dispatch always runs,
+# which is how the first sync is tested.
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron is UTC; 19:30 UTC is 03:30 Asia/Shanghai the next day.
+    - cron: "30 19 * * *"
+
+# Two runs pushing to the same remote would race. Queue them instead.
+concurrency:
+  group: gitee-mirror
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    if: >-
+      github.repository_owner == 'pirate-608' &&
+      (vars.GITEE_MIRROR_ENABLED == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Clone this repository (all branches and tags)
+        run: |
+          set -euo pipefail
+          # The repository is public, so an anonymous clone is enough and the
+          # workflow needs no token for the GitHub side.
+          git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "${RUNNER_TEMP}/mirror.git"
+
+      - name: Push to Gitee
+        env:
+          GITEE_USER: ${{ secrets.GITEE_USER }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ vars.GITEE_REPO || 'huixuewaiyu-readingpart' }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/mirror.git"
+
+          url="https://gitee.com/${GITEE_USER}/${GITEE_REPO}.git"
+          auth="$(printf '%s:%s' "${GITEE_USER}" "${GITEE_TOKEN}" | base64 -w0)"
+
+          # The credential travels as a git config flag, never inside the remote
+          # URL, so it cannot leak through `git remote -v`, the reflog, or the
+          # clone directory. Do not add `-x`: it would echo the header.
+          #
+          # `--prune` removes branches deleted on GitHub. `--force` (the `+`
+          # refspecs) is required because this repository's history has been
+          # rewritten; a fast-forward-only mirror would reject it.
+          git -c "http.https://gitee.com/.extraheader=Authorization: Basic ${auth}" \
+            push --prune --force "${url}" \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'
+
+      - name: Verify the mirror matches this repository
+        env:
+          GITEE_USER: ${{ secrets.GITEE_USER }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ vars.GITEE_REPO || 'huixuewaiyu-readingpart' }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          url="https://gitee.com/${GITEE_USER}/${GITEE_REPO}.git"
+          auth="$(printf '%s:%s' "${GITEE_USER}" "${GITEE_TOKEN}" | base64 -w0)"
+
+          local_head="$(git -C "${RUNNER_TEMP}/mirror.git" rev-parse refs/heads/master)"
+          remote_head="$(
+            git -c "http.https://gitee.com/.extraheader=Authorization: Basic ${auth}" \
+              ls-remote "${url}" refs/heads/master | cut -f1
+          )"
+
+          if [ "${remote_head}" != "${local_head}" ]; then
+            echo "::error::Gitee mirror is out of date: gitee=${remote_head:-<missing>} local=${local_head}"
+            exit 1
+          fi
+          echo "Gitee master is up to date: ${remote_head}"

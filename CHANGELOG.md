@@ -3830,4 +3830,54 @@ macOS 从未实测；静态看没有阻碍项，但"静态看没问题"不等于
 - `install_skill.py` 里顺带删掉一个从未被引用的 `_SHARE_FILES` 常量，它列的是
   早期"开发文档也进 share/"时期的文件名
 
+---
+
+## 52. Gitee 镜像：让 uv 能从国内地址安装
+
+GitHub 的 `git+https` 安装在国内不稳定，所以加了一个推送式镜像：GitHub 仍是
+唯一来源，Gitee 只是只读副本。装的时候用国内地址：
+
+```
+uv tool install git+https://gitee.com/<用户名>/huixuewaiyu-readingpart.git
+```
+
+### 工作流
+
+`.github/workflows/gitee-mirror.yml`：
+
+- 触发：每次 push、手动 dispatch、每天 03:30（Asia/Shanghai）兜底一次
+- 门禁：只有仓库变量 `GITEE_MIRROR_ENABLED=true` 时才在 push 上运行；手动
+  dispatch 不受门禁限制，首次同步用它测试。这样在配置完成前不会每次 push 都留
+  一条失败记录
+- 做法：`git clone --mirror` GitHub 仓库，再用 `--prune --force` 推送
+  `refs/heads/*` 与 `refs/tags/*`。`--force` 是必需的：本仓库历史被重写过，
+  只允许快进会被拒
+- 凭据：`GITEE_USER` / `GITEE_TOKEN`（Actions secrets），通过
+  `http.https://gitee.com/.extraheader` 传 Basic 认证，不写进 remote URL，
+  避免 `git remote -v`、reflog 或克隆目录泄露
+- 校验：推送后 `git ls-remote` 对比 Gitee 的 `refs/heads/master` 与本地，
+  不一致就让 workflow 失败
+- 并发：`concurrency` 同组串行，避免两次同步竞争
+
+### 一次性操作（需要用户完成）
+
+1. Gitee 建**公开的空仓库**，名字与 GitHub 一致（`huixuewaiyu-readingpart`），
+   不要初始化 README，首次推送会用本仓库内容覆盖 master
+2. Gitee 设置 → 安全设置 → 私人令牌 → 生成，勾选 `projects`。令牌只显示一次
+3. GitHub 仓库 Settings → Secrets and variables → Actions：
+   - Secrets：`GITEE_USER`（Gitee 登录名，不是昵称）、`GITEE_TOKEN`
+   - Variables：`GITEE_MIRROR_ENABLED=true`；可选 `GITEE_REPO`（仓库名，
+     默认 `huixuewaiyu-readingpart`）
+4. Actions → "Mirror to Gitee" → Run workflow，确认三个 step 全绿
+5. 验证：`git ls-remote https://gitee.com/<用户名>/huixuewaiyu-readingpart.git`
+   能看到 master；再用上面的 `uv tool install` 装一遍
+6. 建议在 Gitee 仓库设置里确认默认分支是 `master`，仓库介绍写"镜像仓库，
+   问题请到 GitHub 提"
+
+注意：
+
+- Gitee 仓库必须**公开**，否则 `uv` 匿名 clone 会失败
+- 令牌若怀疑泄露，在 Gitee 撤销重发并更新 secret。Actions 会对 secret 原文
+  打码，但 base64 形式不会，所以 workflow 里不能开 `set -x`
+
 
