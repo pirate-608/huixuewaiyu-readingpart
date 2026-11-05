@@ -311,9 +311,12 @@ class ElangSession:
         """
         try:
             title = content.get("title") or art.get("name")
+            name = art.get("name") or ""
             ans, info = er._match_answer_bank(title)
-            if not ans:
-                ans, info = er._match_answer_bank(art.get("name"))
+            # Only run the fuzzy matcher twice when the two titles differ; for the
+            # common case they are the same string.
+            if not ans and name and name != title:
+                ans, info = er._match_answer_bank(name)
             if not ans:
                 return None, None
             answers, why = er._bank_answers_for(ans, content["questions"])

@@ -258,7 +258,8 @@ def _load_answer_bank():
                 if len(_key) < 6:
                     skipped_short += 1
                     continue
-                _ANSWER_BANK[_key] = {"answers": _ans, "title": _title}
+                _ANSWER_BANK[_key] = {"answers": _ans, "title": _title,
+                                      "words": _title_words(_title)}
             # Report the format breakdown, not just a total. The old line said
             # "84 entries" and implied they were all usable; in fact the format
             # gate was rejecting 67 of them because the data says "letter" while
@@ -454,7 +455,7 @@ def _match_answer_bank(article_title):
     art_words = _title_words(article_title)
     best_score, best_answers = 0.0, None
     for entry in _ANSWER_BANK.values():
-        bank_words = _title_words(entry["title"])
+        bank_words = entry.get("words") or _title_words(entry["title"])
         if not art_words or not bank_words:
             continue
         overlap = len(art_words & bank_words)
@@ -482,6 +483,9 @@ CAT_LOAD_RETRIES = 12  # Max retries for category page load
 # Refresh the app token when fewer than this many seconds remain. Checked at
 # article boundaries, not only between subjects (one subject can hold 41 articles).
 TOKEN_REFRESH_MARGIN = 300
+# Content polling interval. The page usually has the data within ~1 s; 750 ms
+# halves the worst-case wait compared with the old 1.5 s without hammering.
+CONTENT_POLL_MS = 750
 
 
 # ---- Durable state helpers ----
@@ -791,7 +795,14 @@ async def navigate_to(page, url):
                 await page.locator("#password").press("Enter")
                 await page.wait_for_url("**elang.zju.edu.cn**", timeout=45000)
                 print("[elang] CAS auto-login OK!")
-                await page.wait_for_timeout(2500)
+                # The app is still on /#/authLogin exchanging the ticket for a
+                # token. Wait for the token instead of a fixed 2.5 s; callers
+                # treat a missing token as "not logged in".
+                await _wait_until(
+                    page,
+                    "() => !!localStorage.getItem('authorization')",
+                    timeout_s=10, interval_ms=250,
+                    label="authorization token after CAS login")
             except Exception as e:
                 print(f"[elang] CAS auto-login failed: {e}")
         else:
@@ -1024,7 +1035,8 @@ async def extract_page_content(page, timeout_s=60, quick=False):
     empty = {"questions": [], "passage": "", "title": "",
              "blocked": False, "log_id": "", "resources_id": ""}
     last_log = None
-    rounds = 1 if quick else max(1, int(timeout_s / 1.5))
+    # Poll often enough to feel instant, but keep the total bounded by timeout_s.
+    rounds = 1 if quick else max(1, int(timeout_s * 1000 / CONTENT_POLL_MS))
 
     # Pin the praxis instance on the page once, then read it everywhere. Also
     # remember the handle in Python so the captcha code reads the same object.
@@ -1072,7 +1084,7 @@ async def extract_page_content(page, timeout_s=60, quick=False):
         if data is None:
             if quick:
                 break
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(CONTENT_POLL_MS)
             continue
 
         note = (len(data["jobs"]), len(data["blocks"]), data["imageLen"] > 0)
@@ -1092,7 +1104,7 @@ async def extract_page_content(page, timeout_s=60, quick=False):
                 "resources_id": data.get("resourcesId") or "",
             }
 
-        await page.wait_for_timeout(1500)
+        await page.wait_for_timeout(CONTENT_POLL_MS)
 
     # No questions arrived. Decide whether a captcha is holding them back, using
     # the image length measured by the loop above — NOT a second, separately
@@ -1100,11 +1112,11 @@ async def extract_page_content(page, timeout_s=60, quick=False):
     # what made the gate report "no captcha" while the loop right above it
     # printed captchaImg=yes.
     blocked = bool(last_log and last_log[2])   # (jobs, blocks, hasImage)
-    state = await _captcha_state(page)
+    state = await _captcha_state(page, want_image=False)
     detail = ""
     if state:
         detail = (f" [jobs={state.get('jobs')} dom={state.get('domQuestions')} "
-                  f"img={len(state.get('imageBase64') or '')}B "
+                  f"img={state.get('imageLen', 0)}B "
                   f"gated={state.get('gated')}]")
     if blocked:
         print(f"  [elang] no questions — captcha image is pending{detail}")
@@ -1278,7 +1290,7 @@ async def set_answers(page, answers):
             return null;
         }
         const root = document.querySelector('#app');
-        const vm = find(root ? root.__vue__ : null, 0);
+        const vm = window.__elangPraxisVm || find(root ? root.__vue__ : null, 0);
         if (!vm) return { error: 'PcReadPraxis not found' };
         const M = (vm.$options && vm.$options.methods) || {};
         if (!M.selectOption) return { error: 'selectOption missing' };
@@ -1351,7 +1363,7 @@ async def submit(page, dry_run=False):
             return null;
         }
         const root = document.querySelector('#app');
-        const vm = find(root ? root.__vue__ : null, 0);
+        const vm = window.__elangPraxisVm || find(root ? root.__vue__ : null, 0);
         if (!vm) return { error: 'PcReadPraxis not found' };
         const M = (vm.$options && vm.$options.methods) || {};
         if (!M.openSubmitConfirm) return { error: 'openSubmitConfirm missing' };
@@ -1373,6 +1385,7 @@ async def submit(page, dry_run=False):
         print("  [elang] dry-run: leaving the confirm dialog open, not posting")
         return "dry-run"
 
+    before_hash = await page.evaluate("() => location.hash")
     await page.wait_for_timeout(600)
     post = await page.evaluate("""async () => {
         function find(vm, d) {
@@ -1384,13 +1397,21 @@ async def submit(page, dry_run=False):
             return null;
         }
         const root = document.querySelector('#app');
-        const vm = find(root ? root.__vue__ : null, 0);
+        const vm = window.__elangPraxisVm || find(root ? root.__vue__ : null, 0);
         if (!vm || !vm.$options.methods.confirmSubmit) return 'confirmSubmit missing';
         try { await vm.$options.methods.confirmSubmit.call(vm); return 'OK'; }
         catch (e) { return 'threw: ' + e.message; }
     }""")
     print(f"  [elang] submit: confirmSubmit -> {post}")
-    await page.wait_for_timeout(4000)
+    # confirmSubmit POSTs twice and then routes to the detail page; wait for that
+    # route instead of sleeping a fixed 4 s on every article (~15 min over a full
+    # run). Fall back to a short pause when the route cannot be observed.
+    if post == "OK":
+        moved = await _wait_until(
+            page, f"() => location.hash !== {json.dumps(before_hash)}",
+            timeout_s=8, interval_ms=200, label="submit route change")
+        if not moved:
+            await page.wait_for_timeout(800)
     return post
 
 
@@ -1493,13 +1514,13 @@ async def detect_captcha(page):
         if vm is None:
             print("[elang] captcha probe: PcReadPraxis not present")
         else:
-            state = await _captcha_state(page)
+            state = await _captcha_state(page, want_image=False)
             if state is None:
                 print("[elang] captcha probe: could not read component state")
             else:
                 # Always surface what we see. Silent detection made the captcha
                 # step look like a hang: the terminal showed nothing at all.
-                print(f"[elang] captcha probe: image={len(state.get('imageBase64') or '')}B "
+                print(f"[elang] captcha probe: image={state.get('imageLen', 0)}B "
                       f"jobs={state.get('jobs')} dom={state.get('domQuestions')} "
                       f"gated={state.get('gated')} cleared={state.get('cleared')}")
                 if state.get("gated"):
@@ -1577,7 +1598,7 @@ async def _wait_for_vm(page, js, timeout_s=40, label="component"):
     return None
 
 
-JS_PRAXIS_STATE = """() => {
+JS_PRAXIS_STATE = """(wantImage) => {
     // Read the instance that pin_praxis_vm() stored ON THE PAGE.
     //
     // Do NOT try to pass a Vue instance in from Python: a Vue component is a big
@@ -1593,7 +1614,11 @@ JS_PRAXIS_STATE = """() => {
         '.question-block, .option-row').length;
     const img = d.imageBase64 || '';
     return {
-        imageBase64: img,
+        // Polling loops only need to know whether the image changed; shipping the
+        // whole data URI on every poll cost tens of KB per round trip.
+        imageBase64: wantImage ? img : '',
+        imageLen: img.length,
+        imageSig: img.slice(-48),
         hasImage: !!img,
         verifyCode: d.verifyCode || '',
         dialogShow: !!d.dialogShow,
@@ -1676,7 +1701,7 @@ async def _focus_captcha_vm(page):
     return info is not None
 
 
-async def _captcha_state(page, vm=None):
+async def _captcha_state(page, vm=None, want_image=True):
     """Read captcha state from the instance pinned on the page.
 
     Why the argument is ignored: a Vue component instance is a large circular
@@ -1687,9 +1712,12 @@ async def _captcha_state(page, vm=None):
 
     `pin_praxis_vm()` stores the live instance on `window.__elangPraxisVm`, so the
     read happens entirely inside the browser where the real object exists.
+
+    `want_image=False` returns the image length and a short signature but not the
+    whole data URI; polling loops use it.
     """
     try:
-        return await page.evaluate(JS_PRAXIS_STATE)
+        return await page.evaluate(JS_PRAXIS_STATE, want_image)
     except Exception as e:
         print(f"[elang] captcha state read failed: {type(e).__name__}: {e}")
         return None
@@ -1850,7 +1878,7 @@ async def _submit_captcha(page, code, vm=None):
 
     for _ in range(10):
         await page.wait_for_timeout(600)
-        state = await _captcha_state(page)
+        state = await _captcha_state(page, want_image=False)
         if state and state.get("cleared"):
             return True
     _remove_file(CAPTCHA_ANSWER_FILE)
@@ -1920,7 +1948,7 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
         while waited < timeout:
             await asyncio.sleep(2)
             waited += 2
-            st = await _captcha_state(page)
+            st = await _captcha_state(page, want_image=False)
             if st and st.get("cleared"):
                 _captcha_seen = True
                 print(f"[elang] [OK] captcha solved by hand after {waited}s")
@@ -1976,14 +2004,14 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
     print(f"[elang] Waiting up to {CAPTCHA_VISION_TIMEOUT}s...")
 
     waited = 0
-    last_image = image
+    last_sig = (state.get("imageLen"), state.get("imageSig"))
     while waited < CAPTCHA_VISION_TIMEOUT:
         await asyncio.sleep(2)
         waited += 2
 
         # the user may have typed it into the page by hand; either way, once the
         # dialog is gone / the job list appears we are done
-        state = await _captcha_state(page)
+        state = await _captcha_state(page, want_image=False)
         if state and state.get("cleared"):
             _captcha_seen = True
             print("[elang] [OK] CAPTCHA resolved (page is usable)")
@@ -1998,16 +2026,24 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
                 _captcha_seen = True
                 print("[elang] [OK] CAPTCHA solved via vision model")
                 return True
-            # wrong -> the app refreshes the image; re-issue the request
-            state = await _captcha_state(page)
+            # wrong -> the app refreshes the image; re-issue the request. Poll on
+            # the cheap signature first, then fetch the full image only if it
+            # actually changed.
+            state = await _captcha_state(page, want_image=False)
             if not state:
                 return False
-            new_image = state.get("imageBase64") or ""
-            if new_image and new_image != last_image:
-                last_image = new_image
-                _save_captcha_image(_decode_data_uri(new_image), "captcha_unsolved.png")
-                _write_captcha_request(_decode_data_uri(new_image))
-                print("[elang] new captcha image — request re-issued")
+            sig = (state.get("imageLen"), state.get("imageSig"))
+            if state.get("imageLen") and sig != last_sig:
+                last_sig = sig
+                full = await _captcha_state(page, want_image=True)
+                new_image = (full or {}).get("imageBase64") or ""
+                if new_image:
+                    _save_captcha_image(_decode_data_uri(new_image),
+                                        "captcha_unsolved.png")
+                    _write_captcha_request(_decode_data_uri(new_image))
+                    print("[elang] new captcha image — request re-issued")
+                else:
+                    print("[elang] image changed but could not be read again")
             else:
                 print("[elang] image unchanged; will not retry the same guess")
         elif answer:
@@ -2146,7 +2182,8 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
         # ---- answer bank: apply when it matches this article's exact shape ----
         data = None
         bank_ans, match_info = _match_answer_bank(content["title"] or name)
-        if not bank_ans:
+        # Have to be careful: title could be different from the list name, e.g. maybe the title empty.
+        if not bank_ans and name and name != (content["title"] or ""):
             bank_ans, match_info = _match_answer_bank(name)
         if bank_ans:
             bank_answers, why = _bank_answers_for(bank_ans, questions)
@@ -2460,7 +2497,11 @@ async def finish_login(page):
     """
     for _ in range(30):
         if await session_is_live(page):
-            return await save_session(page)
+            # Persisting is an optimisation for the NEXT run; a failure to write
+            # (e.g. a read-only home) must not turn a successful login into a
+            # failure, so the result is deliberately ignored here.
+            await save_session(page)
+            return True
         await page.wait_for_timeout(1000)
     print("[elang] login did not complete (no user/authorization in localStorage)")
     return False
@@ -2580,30 +2621,18 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
         # `PcReadIndex.$data.listData` holds subjects (not the top-level "reading"
         # category): each item is {id, name, resource_num, category_id, ...} and
         # `id` is the subject_id used by /#/pc/read/learn?subject_id=<id>.
-        # Only subjects with resources are worth visiting.
-        categories = []
-        for _ in range(CAT_LOAD_RETRIES):
-            categories = await page.evaluate("""() => {
-                function find(vm, d) {
-                    if (!vm || d > 14) return null;
-                    const n = (vm.$options && (vm.$options.name || vm.$options.__file)) || null;
-                    if (n === 'PcReadIndex') return vm;
-                    if (vm.$data && Array.isArray(vm.$data.listData)) return vm;
-                    for (const c of (vm.$children || [])) { const r = find(c, d + 1); if (r) return r; }
-                    return null;
-                }
-                const root = document.querySelector('#app');
-                const vm = find(root ? root.__vue__ : null, 0);
-                if (!vm) return [];
-                return (vm.$data.listData || []).map(x => ({
-                    id: x.id,
-                    name: x.name || '',
-                    resource_num: Number(x.resource_num || 0),
-                })).filter(x => x.id != null && x.resource_num > 0);
-            }""")
-            if categories:
-                break
-            await page.wait_for_timeout(1200)
+        # Only subjects with resources are worth visiting. The wait above already
+        # pinned the instance and proved listData is non-empty, so one read is
+        # enough; the old retry loop slept 1.2 s per attempt on top of that.
+        categories = await page.evaluate("""() => {
+            const vm = window.__elangIndexVm;
+            if (!vm) return [];
+            return (vm.$data.listData || []).map(x => ({
+                id: x.id,
+                name: x.name || '',
+                resource_num: Number(x.resource_num || 0),
+            })).filter(x => x.id != null && x.resource_num > 0);
+        }""")
 
         if not categories:
             print("[elang] ERROR: no subjects found on the read index")
@@ -2651,6 +2680,10 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
         article_counter = total_submitted
         submitted_this_run = 0
         stop_requested = False
+        # Schedule the 50-article pause relative to a fresh multiple, so resuming
+        # exactly on a boundary does not immediately pause again.
+        next_checkpoint = ((article_counter // CHECKPOINT_INTERVAL) + 1
+                           ) * CHECKPOINT_INTERVAL
 
         for cat_idx, cat in enumerate(categories):
             cat_id = cat["id"]
@@ -2678,26 +2711,19 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
             await ensure_fresh_token(
                 page, "https://elang.zju.edu.cn/#/pc/read/index")
 
-            # Navigate: clear page → goto learn URL (twice if CAS redirects to /#/home)
+            # Navigate: clear page → goto learn URL (retry once if CAS lands on /#/home)
             learn_url = f"https://elang.zju.edu.cn/#/pc/read/learn?subject_id={cat_id}"
             await page.goto("about:blank")
-            await page.wait_for_timeout(500)
             await page.goto(learn_url, wait_until="domcontentloaded", timeout=30000)
-            # Wait for SPA to render article list (retry with increasing wait)
-            for _ in range(CAT_LOAD_RETRIES):
-                await page.wait_for_timeout(1000)
-                body = await page.evaluate("() => document.body.innerText")
-                if "..." not in body and len(body.split("\n")) > 5:
-                    break
-            # If CAS redirected us to /#/home, retry (2nd goto lands correctly)
-            if "/#/home" in page.url or "learn" not in page.url:
-                print(f"[elang]   landed on home, retrying...")
+            # Wait on the component's DATA (and pin it) instead of guessing from
+            # the body text, which used to sleep a full extra second per try.
+            ready = await _wait_until(page, JS_PIN_LEARN_VM, timeout_s=15,
+                                      interval_ms=300, label="PcReadLearn list")
+            if (not ready) or "/#/home" in page.url or "learn" not in page.url:
+                print("[elang]   list not ready or landed on home, retrying...")
                 await page.goto(learn_url, wait_until="domcontentloaded", timeout=30000)
-                for _ in range(CAT_LOAD_RETRIES):
-                    await page.wait_for_timeout(1000)
-                    body = await page.evaluate("() => document.body.innerText")
-                    if "..." not in body and len(body.split("\n")) > 5:
-                        break
+                ready = await _wait_until(page, JS_PIN_LEARN_VM, timeout_s=15,
+                                          interval_ms=300, label="PcReadLearn list")
             print(f"[elang]   nav URL: {page.url}")
 
             article_infos = await get_article_list(page)
@@ -2777,7 +2803,7 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
                 break
 
             # 50-article user confirmation checkpoint
-            if article_counter > 0 and article_counter % CHECKPOINT_INTERVAL == 0:
+            if article_counter >= next_checkpoint:
                 print(f"\n{'='*60}")
                 print(f"CHECKPOINT: {total_submitted} articles submitted.")
                 print(f"Continue? Write to {SIGNAL_FILE}:")
@@ -2796,6 +2822,7 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
                     stop_requested = True
                     break
                 print("[elang] Continuing...")
+                next_checkpoint = article_counter + CHECKPOINT_INTERVAL
 
         if stop_requested:
             await context.close()
@@ -2807,7 +2834,6 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
             f"(submitted {total_submitted} total) across {done_cats}/"
             f"{len(categories)} subjects marked complete."
         )
-        await asyncio.sleep(3)
         await context.close()
 
 
@@ -2886,10 +2912,8 @@ async def mode_solve(url, dry_run=False):
             print(f"[elang] submit did not complete: {submit_result}")
             await context.close()
             return
-        await page.wait_for_timeout(3000)
 
         print(f"\n[elang] Done!")
-        await asyncio.sleep(10)
         await context.close()
 
 
@@ -2918,11 +2942,10 @@ async def mode_batch(learn_url, dry_run=False):
             return
         learn_hash = learn_url.split("#", 1)[1] if "#" in learn_url else ""
 
-        for _ in range(CAT_LOAD_RETRIES):
-            await page.wait_for_timeout(800)
-            text = await page.evaluate("() => document.body.innerText")
-            if "..." not in text and len(text.split("\n")) > 10:
-                break
+        # Wait on the component's data (and pin it) instead of polling body text
+        # with a fixed sleep per retry.
+        await _wait_until(page, JS_PIN_LEARN_VM, timeout_s=15,
+                          interval_ms=300, label="PcReadLearn list")
 
         article_infos = await get_article_list(page)
         print(f"\n[elang] {len(article_infos)} articles")
@@ -2930,7 +2953,6 @@ async def mode_batch(learn_url, dry_run=False):
         results = await process_articles(page, article_infos, 0, learn_hash,
                                          subject_id=subject_id, dry_run=dry_run)
         print_summary(results)
-        await asyncio.sleep(10)
         await context.close()
 
 
