@@ -480,6 +480,80 @@ BACK_LOAD_WAIT = 0.8  # Seconds between back-navigation retries
 BACK_RETRIES = 8  # Max retries for back navigation
 CAT_LOAD_RETRIES = 12  # Max retries for category page load
 
+
+# ---- Durable state helpers ----
+
+def _atomic_write_json(path, data):
+    """Write JSON via a sibling temp file, then replace.
+
+    A crash mid-dump used to leave a truncated checkpoint, and the next run then
+    died in `json.load` before doing any work. `os.replace` is atomic on one
+    volume, so readers see either the old file or the new one.
+    """
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except Exception:
+            pass
+    os.replace(tmp, p)
+
+
+def _load_checkpoint():
+    """Restore progress, tolerating a missing or corrupt file.
+
+    Losing the checkpoint only costs a re-scan of completed subjects; crashing on
+    it costs the whole run.
+    """
+    if not os.path.exists(CHECKPOINT_FILE):
+        return {}
+    try:
+        with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"[elang] WARNING: checkpoint unreadable ({type(e).__name__}); "
+              f"starting from scratch")
+        return {}
+    if not isinstance(data, dict):
+        print("[elang] WARNING: checkpoint has an unexpected shape; "
+              "starting from scratch")
+        return {}
+    return data
+
+
+def _answers_applied(result, questions):
+    """Did set_answers() land one answer per question?
+
+    set_answers reports counts and notes; a missing component, an unknown job or
+    a thrown selectOption must never be submitted as if it were answered.
+    """
+    if not isinstance(result, dict) or result.get("error"):
+        return False
+    try:
+        answered = int(result.get("choice", 0)) + int(result.get("fill", 0))
+    except Exception:
+        return False
+    if answered < len(questions):
+        return False
+    notes = result.get("notes") or []
+    return not any("no job" in str(n) for n in notes)
+
+
+def _signal_matches(data, expected_article_number):
+    """True when a signal belongs to the article we are waiting on.
+
+    Signals written before this field existed carry no id; those are accepted so
+    an older `elang answer` still works.
+    """
+    if expected_article_number is None:
+        return True
+    got = (data or {}).get("article_number")
+    return got is None or str(got) == str(expected_article_number)
+
 # ---- Captcha: automatic OCR + vision-model fallback ----
 # ddddocr is a small offline model and is simply wrong on some of these noisy
 # images. When it fails we hand the image to a vision model (or a human) through
@@ -1206,8 +1280,14 @@ async def set_answers(page, answers):
                 notes.push('fill q' + qIdx + ': ' + out.length + ' blank(s)');
                 fill++;
             } else {
-                M.selectOption.call(vm, qIdx, Number(val));
-                choice++;
+                // One bad answer must not reject the whole evaluate: report it in
+                // notes and let the caller decide (it will refuse to submit).
+                try {
+                    M.selectOption.call(vm, qIdx, Number(val));
+                    choice++;
+                } catch (e) {
+                    notes.push('q' + qIdx + ': selectOption failed: ' + e.message);
+                }
             }
         }
         return { choice: choice, fill: fill, notes: notes,
@@ -1291,8 +1371,13 @@ async def submit(page, dry_run=False):
 # ============================================================
 
 
-async def wait_for_ai(timeout=AI_TIMEOUT):
-    """Wait for AI to write SIGNAL_FILE. Returns data dict or None."""
+async def wait_for_ai(timeout=AI_TIMEOUT, expect_article_number=None):
+    """Wait for the answering side to write SIGNAL_FILE. Returns data or None.
+
+    When `expect_article_number` is given, a signal that names a different
+    article is discarded. That closes the late-answer hole: an answer composed
+    for article A must not be applied to article B after A timed out.
+    """
     if os.path.exists(SIGNAL_FILE):
         os.remove(SIGNAL_FILE)
 
@@ -1307,8 +1392,20 @@ async def wait_for_ai(timeout=AI_TIMEOUT):
                 status = data.get("status", "")
                 # Accept: answers_ready (with any answers, even empty), skip, continue, stop
                 if status in ("answers_ready", "skip", "continue", "stop"):
+                    if not _signal_matches(data, expect_article_number):
+                        print(f"[elang] ignoring a signal for article "
+                              f"{data.get('article_number')} "
+                              f"(waiting for article {expect_article_number})")
+                        try:
+                            os.remove(SIGNAL_FILE)
+                        except Exception:
+                            pass
+                        continue
                     return data
-            except (json.JSONDecodeError, IOError):
+            # A torn read can be a JSON error OR a UnicodeDecodeError (the file is
+            # UTF-8 and answers may contain multibyte text); neither may kill the
+            # run.
+            except (json.JSONDecodeError, IOError, UnicodeDecodeError):
                 pass
     return None
 
@@ -1331,7 +1428,8 @@ async def request_ai_answers(article_data):
     print('      {"status":"answers_ready","answers":[[qIdx,value],...]}')
     print("    with this tool that is:  elang pending   /   elang answer ...")
     print(f"    timeout: {AI_TIMEOUT}s")
-    return await wait_for_ai()
+    return await wait_for_ai(
+        expect_article_number=article_data.get("article_number"))
 
 
 # ============================================================
@@ -2013,14 +2111,41 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
             data = await request_ai_answers(article_data)
 
         if data and data.get("status") in ("answers_ready", "skip"):
-            if data.get("status") == "answers_ready" and data.get("answers"):
-                await set_answers(page, data["answers"])
+            # Never record success without checking what actually happened. A
+            # missing component, an unapplied answer or a failed confirmSubmit
+            # used to be logged as "submitted" anyway.
+            applied = True
+            apply_detail = ""
+            if (data.get("status") == "answers_ready"
+                    and data.get("answers") is not None):
+                try:
+                    apply_result = await set_answers(page, data["answers"])
+                except Exception as e:
+                    apply_result = {"error": f"{type(e).__name__}: {e}"}
+                applied = _answers_applied(apply_result, questions)
+                if not applied:
+                    apply_detail = str(apply_result)
+                    print(f"  [FAIL] answers were not applied: {apply_detail}")
             else:
                 print("  [SKIP] submitting as-is")
-            await submit(page, dry_run=dry_run)
-            results.append({"name": name,
-                            "status": "dry_run" if dry_run else "submitted"})
-            print(f"  [OK] {'dry-run (not posted)' if dry_run else 'submitted'}")
+
+            if not applied:
+                results.append({"name": name, "status": "answers_incomplete",
+                                "detail": apply_detail})
+            else:
+                try:
+                    submit_result = await submit(page, dry_run=dry_run)
+                except Exception as e:
+                    submit_result = f"threw: {type(e).__name__}: {e}"
+                ok = (submit_result == "dry-run") if dry_run else (submit_result == "OK")
+                if not ok:
+                    print(f"  [FAIL] submit did not complete: {submit_result}")
+                    results.append({"name": name, "status": "submit_failed",
+                                    "detail": str(submit_result)})
+                else:
+                    results.append({"name": name,
+                                    "status": "dry_run" if dry_run else "submitted"})
+                    print(f"  [OK] {'dry-run (not posted)' if dry_run else 'submitted'}")
         else:
             print("  [FAIL] AI timeout")
             results.append({"name": name, "status": "timeout"})
@@ -2436,11 +2561,9 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
             await context.close()
             return
 
-        # Restore checkpoint
-        checkpoint = {}
-        if os.path.exists(CHECKPOINT_FILE):
-            with open(CHECKPOINT_FILE, "r", encoding="utf-8") as f:
-                checkpoint = json.load(f)
+        # Restore checkpoint (a corrupt file must not abort the run)
+        checkpoint = _load_checkpoint()
+        if checkpoint:
             print(
                 f"\n[elang] Resuming: {checkpoint.get('total_submitted', 0)} done, "
                 f"{len(checkpoint.get('completed_categories', []))} categories complete"
@@ -2523,11 +2646,11 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
                           f"{len(pending) - remaining} for a later run")
 
             if not article_infos:
-                print("[elang] No articles - marking category complete")
-                completed_cats.append(cat_id)
-                checkpoint["completed_categories"] = completed_cats
-                with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
-                    json.dump(checkpoint, f, ensure_ascii=False, indent=2)
+                # An empty list here is ambiguous: the subject may genuinely have
+                # no articles, or the list failed to load. Do not mark it complete
+                # (that would skip it forever); report and move on.
+                print(f"[elang] WARNING: no articles read for {cat_name}; "
+                      f"NOT marking it complete")
                 continue
 
             learn_hash = f"/pc/read/learn?subject_id={cat_id}"
@@ -2551,15 +2674,23 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
             # Mark the subject complete only when nothing was left behind.
             # `trimmed` records that --limit cut the work short; marking it
             # complete then would make a later full run skip the remainder.
+            # Failures count too: one unresolved captcha or expired token must not
+            # turn a subject into "done forever".
+            failed = [r for r in results
+                      if r.get("status") not in
+                      ("submitted", "dry_run", "skipped_completed")]
             if trimmed:
                 print("[elang] --limit: NOT marking this subject complete "
                       "(unfinished articles remain)")
+            elif failed:
+                print(f"[elang] {len(failed)} article(s) did not complete; "
+                      f"NOT marking this subject complete: "
+                      f"{[r.get('name') for r in failed][:5]}")
             else:
                 completed_cats.append(cat_id)
             checkpoint["completed_categories"] = completed_cats
             checkpoint["total_submitted"] = total_submitted
-            with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
-                json.dump(checkpoint, f, ensure_ascii=False, indent=2)
+            _atomic_write_json(CHECKPOINT_FILE, checkpoint)
 
             print_summary(results)
 
@@ -2647,9 +2778,24 @@ async def mode_solve(url, dry_run=False):
             return
 
         if data.get("status") == "answers_ready" and data.get("answers") is not None:
-            await set_answers(page, data["answers"])
-        await page.wait_for_timeout(500)
-        await submit(page, dry_run=dry_run)
+            try:
+                apply_result = await set_answers(page, data["answers"])
+            except Exception as e:
+                apply_result = {"error": f"{type(e).__name__}: {e}"}
+            if not _answers_applied(apply_result, content["questions"]):
+                print(f"[elang] answers were not applied ({apply_result}); "
+                      f"not submitting.")
+                await context.close()
+                return
+        try:
+            submit_result = await submit(page, dry_run=dry_run)
+        except Exception as e:
+            submit_result = f"threw: {type(e).__name__}: {e}"
+        ok = (submit_result == "dry-run") if dry_run else (submit_result == "OK")
+        if not ok:
+            print(f"[elang] submit did not complete: {submit_result}")
+            await context.close()
+            return
         await page.wait_for_timeout(3000)
 
         print(f"\n[elang] Done!")

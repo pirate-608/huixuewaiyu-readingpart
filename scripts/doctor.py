@@ -98,6 +98,26 @@ def check_browser():
     return result
 
 
+def _redact_credentials(creds):
+    """A JSON-safe view of the credential state with NO secret values.
+
+    `elang doctor --json` is meant to be run by agents and captured in
+    transcripts, so the username and password must never appear in it. The
+    human-readable path already prints only set/MISSING; this keeps the two
+    consistent.
+    """
+    return {
+        "ok": creds.get("ok", False),
+        "env_file": creds.get("env_file"),
+        "env_file_exists": creds.get("env_file_exists"),
+        "source": creds.get("source"),
+        "username_from": creds.get("username_from"),
+        "password_from": creds.get("password_from"),
+        "username_set": bool(creds.get("username")),
+        "password_set": bool(creds.get("password")),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -117,7 +137,7 @@ def main():
         "modules": mods,
         "borrowed_modules": borrowed,
         "browser": browser,
-        "credentials": creds,
+        "credentials": _redact_credentials(creds),
     }
 
     if args.json:

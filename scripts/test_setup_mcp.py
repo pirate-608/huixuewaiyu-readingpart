@@ -114,7 +114,10 @@ patch.write_text(
 rc, out = run(["--host", "dsh"], {"DSH_PROFILE": "desktop"})
 check("dsh: exit 0", rc == 0, f"rc={rc}\n{out[-400:]}")
 import yaml
-data = yaml.safe_load(patch.read_text(encoding="utf-8"))
+raw_patch = patch.read_text(encoding="utf-8")
+check("dsh: comment preserved",
+      "# a comment that must survive" in raw_patch, raw_patch[:120])
+data = yaml.safe_load(raw_patch)
 check("dsh: is a list", isinstance(data, list), type(data).__name__)
 check("dsh: entry added", any(e.get("id") == "mcp-elang" for e in data if isinstance(e, dict)))
 check("dsh: existing entry preserved",
@@ -188,6 +191,21 @@ check("codex: all original lines preserved",
       str([l for l in original_lines if l not in raw2]))
 
 # ---------------------------------------------------------------- misc
+print("\n=== claude: another server's secrets are never echoed ===")
+(PROJECT / ".mcp.json").write_text(json.dumps({
+    "mcpServers": {
+        "other-server": {
+            "command": "C:\\secret\\other.exe",
+            "env": {"OTHER_API_KEY": "sk-should-not-be-printed"},
+        }
+    }
+}, indent=4), encoding="utf-8")
+rc, out = run(["--host", "claude", "--dry-run"])
+check("claude: dry-run ok with a foreign entry", rc == 0, f"rc={rc}")
+check("claude: foreign secret NOT echoed", "sk-should-not-be-printed" not in out)
+check("claude: foreign command NOT echoed", "other.exe" not in out)
+check("claude: our entry IS previewed", "elang-reading" in out)
+
 print("\n=== misc ===")
 rc, out = run(["--host", "nope"])
 check("unknown host rejected", rc != 0 and "unknown host" in out)

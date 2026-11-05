@@ -376,12 +376,13 @@ def main():
         rc = 0
         for label, root in labelled:
             dest = root / SKILL_NAME
-            if dest.is_symlink():
+            if dest.is_symlink() or _is_junction(dest):
                 state = "linked"
             elif dest.exists():
                 state = "present"
             else:
                 state = "absent"
+                rc = 1
             print(f"  [{label:<16}] {dest}  -> {state}")
         return rc
 

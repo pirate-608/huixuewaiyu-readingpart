@@ -43,6 +43,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -90,23 +91,20 @@ def _atomic_write(path: Path, text: str):
     os.replace(tmp, path)
 
 
-def _diff_lines(old: str, new: str):
-    """Return only the lines ADDED (never the file body — it may hold secrets)."""
-    import difflib
-    added = [l for l in difflib.unified_diff(old.splitlines(), new.splitlines(),
-                                             lineterm="", n=0)
-             if l.startswith("+") and not l.startswith("+++")]
-    return [l[1:] for l in added]
+def _apply(path: Path, new_text: str, verify, dry_run: bool, label: str,
+           preview=None):
+    """Backup -> write -> re-parse; restore on failure. Returns (ok, added).
 
-
-def _apply(path: Path, new_text: str, verify, dry_run: bool, label: str):
-    """Backup -> write -> re-parse; restore on failure. Returns (ok, added)."""
+    `preview` is the list of lines this change adds. Only that is printed: the
+    existing body is never shown, because these files hold other servers' API
+    keys. A textual diff of a re-serialized file used to leak all of them.
+    """
     old = path.read_text(encoding="utf-8") if path.exists() else ""
     if old == new_text:
         print(f"  [{label}] already up to date: {path}")
         return True, []
 
-    added = _diff_lines(old, new_text)
+    added = list(preview or [])
     print(f"  [{label}] {path}")
     for line in added:
         print(f"      + {line}")
@@ -155,14 +153,17 @@ def patch_claude(scope, dry_run):
                   f"{type(e).__name__}: {e}")
             return False
     servers = cfg.setdefault("mcpServers", {})
-    servers[CLAUDE_KEY] = entry_claude()
+    entry = entry_claude()
+    servers[CLAUDE_KEY] = entry
     text = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
+    preview = json.dumps({"mcpServers": {CLAUDE_KEY: entry}},
+                         ensure_ascii=False, indent=2).splitlines()
 
     def verify(p):
         back = json.loads(p.read_text(encoding="utf-8"))
         assert CLAUDE_KEY in back.get("mcpServers", {}), "entry missing after write"
 
-    ok, _ = _apply(path, text, verify, dry_run, "claude")
+    ok, _ = _apply(path, text, verify, dry_run, "claude", preview=preview)
     if ok and not dry_run:
         print("      restart Claude Code (or reload the project) to pick it up")
     return ok
@@ -209,6 +210,71 @@ def _dsh_patch_path():
     return None
 
 
+def _dsh_indent(old):
+    """Leading whitespace of the existing sequence items, or "" at the root."""
+    m = re.search(r"(?m)^([ \t]*)- ", old)
+    return m.group(1) if m else ""
+
+
+def _dsh_render_block(yaml, entry, indent):
+    """Render OUR entry as YAML lines at `indent`.
+
+    Only our own entry is rendered and printed; the host config can contain other
+    servers with credentials, so its body is never re-serialized or echoed.
+    """
+    text = yaml.safe_dump([entry], allow_unicode=True, sort_keys=False,
+                          default_flow_style=False)
+    return [indent + line if line.strip() else line
+            for line in text.splitlines()]
+
+
+def _dsh_append_text(old, block_lines):
+    stripped = old.strip()
+    if stripped in ("", "[]"):
+        # Empty document or an empty list: the block alone is the list.
+        return "\n".join(block_lines) + "\n"
+    body = old if old.endswith("\n") else old + "\n"
+    return body + "\n".join(block_lines) + "\n"
+
+
+def _dsh_replace_text(yaml, old, entry, indent):
+    """Replace the existing `- id: mcp-elang` item textually.
+
+    Returns None when the block boundaries cannot be located, so the caller can
+    fall back to a full re-serialization (which drops comments; it says so).
+    """
+    try:
+        root = yaml.compose(old)
+    except Exception:
+        return None
+    if not isinstance(root, yaml.nodes.SequenceNode):
+        return None
+    nodes = root.value
+    target = None
+    next_line = None
+    for i, node in enumerate(nodes):
+        if not isinstance(node, yaml.nodes.MappingNode):
+            continue
+        ids = [v for k, v in node.value if k.value == "id"]
+        if ids and getattr(ids[0], "value", None) == DSH_ID:
+            target = node
+            if i + 1 < len(nodes):
+                next_line = nodes[i + 1].start_mark.line
+            break
+    if target is None:
+        return None
+    lines = old.splitlines()
+    start = target.start_mark.line
+    end = next_line if next_line is not None else len(lines)
+    # Leave trailing blank lines / comments with whatever follows them.
+    while end > start and (lines[end - 1].strip() == ""
+                           or lines[end - 1].lstrip().startswith("#")):
+        end -= 1
+    block = _dsh_render_block(yaml, entry, indent)
+    new_lines = lines[:start] + block + lines[end:]
+    return "\n".join(new_lines).rstrip("\n") + "\n"
+
+
 def patch_dsh(scope, dry_run):
     if scope == "project":
         print("  [dsh] project scope is not supported for MCP registration yet; "
@@ -234,15 +300,28 @@ def patch_dsh(scope, dry_run):
         if not isinstance(data, list):
             print(f"  [dsh] expected a top-level list, found {type(data).__name__}")
             return False
-        # idempotent: replace an entry with the same id, else append
+
         idx = next((i for i, e in enumerate(data)
                     if isinstance(e, dict) and e.get("id") == DSH_ID), None)
+        if idx is not None and data[idx] == entry:
+            print(f"  [dsh] already up to date: {path}")
+            return True
+
+        indent = _dsh_indent(old)
+        block = _dsh_render_block(yaml, entry, indent)
         if idx is None:
-            data.append(entry)
+            # Append textually: parsing + re-dumping would delete the operator's
+            # comments and re-indent the whole profile.
+            text = _dsh_append_text(old, block)
         else:
-            data[idx] = entry
-        text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False,
-                              default_flow_style=False)
+            text = _dsh_replace_text(yaml, old, entry, indent)
+            if text is None:
+                print("  [dsh] could not locate the existing entry textually; "
+                      "rewriting the file (comments may be lost)")
+                data[idx] = entry
+                text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False,
+                                      default_flow_style=False)
+                block = text.splitlines()
 
         def verify(p):
             back = _yaml().safe_load(p.read_text(encoding="utf-8"))
@@ -250,7 +329,7 @@ def patch_dsh(scope, dry_run):
             assert any(isinstance(e, dict) and e.get("id") == DSH_ID for e in back), \
                 "entry missing after write"
 
-        ok, _ = _apply(path, text, verify, dry_run, "dsh")
+        ok, _ = _apply(path, text, verify, dry_run, "dsh", preview=block)
         if ok and not dry_run:
             print("      restart DSH so the profile recomposes")
             print("      NOTE: the server needs to run OUTSIDE a file sandbox "
@@ -269,7 +348,8 @@ def patch_dsh(scope, dry_run):
               f"or install pyyaml so it can be replaced in place.")
         return False
     text = old.rstrip("\n") + "\n" + block
-    ok, _ = _apply(path, text, lambda p: None, dry_run, "dsh")
+    ok, _ = _apply(path, text, lambda p: None, dry_run, "dsh",
+                   preview=block.splitlines())
     if ok and not dry_run:
         print("      restart DSH; verify the profile still loads")
     return ok
@@ -357,7 +437,8 @@ def patch_codex(scope, dry_run):
         assert SERVER_NAME in back.get("mcp_servers", {}), \
             "entry missing after write"
 
-    ok, _ = _apply(path, text, verify, dry_run, "codex")
+    ok, _ = _apply(path, text, verify, dry_run, "codex",
+                   preview=_codex_block(entry).splitlines())
     if ok and not dry_run:
         print("      restart Codex to pick it up")
     return ok

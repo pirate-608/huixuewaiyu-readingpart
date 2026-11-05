@@ -147,23 +147,40 @@ def _resolve_fill(raw, question, blank_i):
     return raw      # let the page decide; don't invent a value
 
 
-def cmd_answer(args):
-    if args.raw:
+def _validate_raw(answers, by_index):
+    """Validate a --raw payload against the pending questions.
+
+    `--raw` used to be sent verbatim, which let a caller answer an index that
+    does not exist (silently skipped later) or hit the checkpoint pause. Check
+    the shape here so a bad payload fails loudly and nothing is written.
+    """
+    if not isinstance(answers, list):
+        return "expects a list of [qIndex, value] pairs"
+    for item in answers:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            return f"each answer must be [qIndex, value], got {item!r}"
         try:
-            answers = json.loads(args.raw)
-        except Exception as e:
-            print(f"ERROR: --raw is not valid JSON: {type(e).__name__}: {e}")
-            return 1
-        if not isinstance(answers, list):
-            print("ERROR: --raw expects a list of [qIndex, value] pairs")
-            return 1
-        _send({"status": "answers_ready", "answers": answers})
-        return 0
+            qi = int(item[0])
+        except Exception:
+            return f"qIndex must be a number, got {item[0]!r}"
+        q = by_index.get(qi)
+        if q is None:
+            return f"q{qi} is not in the pending article (seen: {sorted(by_index)})"
+        val = item[1]
+        if q.get("kind") == "choice":
+            n = len(q.get("options") or [])
+            if not isinstance(val, int) or isinstance(val, bool) or not 0 <= val < n:
+                return (f"q{qi} is a choice question with {n} option(s); "
+                        f"value must be an index 0..{n - 1}, got {val!r}")
+        else:
+            blanks = q.get("blanks") or 1
+            vals = val if isinstance(val, list) else [val]
+            if blanks > 1 and len(vals) != blanks:
+                return f"q{qi} needs {blanks} value(s), one per blank; got {len(vals)}"
+    return None
 
-    if not args.pairs:
-        print("ERROR: nothing to answer, e.g.  elang answer 0=A 1=C")
-        return 1
 
+def cmd_answer(args):
     d = _load()
     if d is None:
         print(f"no pending article ({CURRENT} not present) — nothing to answer")
@@ -174,6 +191,24 @@ def cmd_answer(args):
         return 1
 
     by_index = {q.get("index"): q for q in (d.get("questions") or [])}
+
+    if args.raw:
+        try:
+            answers = json.loads(args.raw)
+        except Exception as e:
+            print(f"ERROR: --raw is not valid JSON: {type(e).__name__}: {e}")
+            return 1
+        problem = _validate_raw(answers, by_index)
+        if problem:
+            print(f"ERROR: --raw {problem}")
+            return 1
+        _send({"status": "answers_ready", "answers": answers,
+               "article_number": d.get("article_number"), "url": d.get("url")})
+        return 0
+
+    if not args.pairs:
+        print("ERROR: nothing to answer, e.g.  elang answer 0=A 1=C")
+        return 1
 
     answers = []
     for pair in args.pairs:
@@ -187,19 +222,26 @@ def cmd_answer(args):
         qi = int(qi_s)
         val = val.strip()
 
-        if "," in val:
-            q = by_index.get(qi)
-            parts = [v.strip() for v in val.split(",") if v.strip()]
-            if q is not None:
-                parts = [_resolve_fill(p, q, i) for i, p in enumerate(parts)]
-            answers.append([qi, parts])
-            continue
-
         q = by_index.get(qi)
         if q is None:
             print(f"ERROR: q{qi} is not in the pending article "
                   f"(seen: {sorted(by_index)})")
             return 1
+
+        if "," in val:
+            if q.get("kind") == "choice":
+                print(f"ERROR: q{qi} is a choice question; give one letter")
+                return 1
+            parts = [v.strip() for v in val.split(",") if v.strip()]
+            blanks = q.get("blanks") or 1
+            if blanks > 1 and len(parts) != blanks:
+                print(f"ERROR: q{qi} has {blanks} blank(s); give {blanks} values "
+                      f"comma separated")
+                return 1
+            parts = [_resolve_fill(p, q, i) for i, p in enumerate(parts)]
+            answers.append([qi, parts])
+            continue
+
         if q.get("kind") == "choice":
             idx = _letter_to_index(val, q)
             if idx is None:
@@ -217,7 +259,8 @@ def cmd_answer(args):
             answers.append([qi, [_resolve_fill(val, q, 0)]])
 
     answers.sort(key=lambda a: a[0])
-    _send({"status": "answers_ready", "answers": answers})
+    _send({"status": "answers_ready", "answers": answers,
+           "article_number": d.get("article_number"), "url": d.get("url")})
     return 0
 
 
