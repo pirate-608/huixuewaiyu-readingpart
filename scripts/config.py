@@ -112,31 +112,6 @@ def _pick(env, keys):
     return "", None
 
 
-def env_map():
-    """Merge the resolved .env file with real environment variables.
-
-    Real environment variables WIN, matching the credential rule: a host that
-    spawns this tool can override anything, and a stale file must never beat an
-    explicit value.
-
-    Returns (merged, path, source).
-    """
-    path, source = resolve_env_file()
-    merged = dict(parse_env_file(path))
-    for k, v in os.environ.items():
-        if v:
-            merged[k] = v
-    return merged, path, source
-
-
-def get(name, default=""):
-    """Read one setting: real environment first, then the .env file."""
-    v = os.environ.get(name)
-    if v:
-        return v
-    return parse_env_file(resolve_env_file()[0]).get(name, default)
-
-
 # ---------------------------------------------------------------- IPC paths
 
 def ipc_dir():

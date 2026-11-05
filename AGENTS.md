@@ -168,7 +168,15 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 - **题目只有通过验证码后才加载**，所以闸门检测 = 有验证码图且 `jobList` 为空
 - **作答**：选择题 `selectOption(qIdx, optIdx)`；
   填空题 `insertWordAnswers[jobId]` 是**每空一个值**的数组（type_id 2/5/7/8）
-- **提交**两步：`openSubmitConfirm()` → `confirmSubmit()`，它 POST 两次并跳详情页
+- **提交**两步：`openSubmitConfirm()` → `confirmSubmit()`，它 POST 两次并跳详情页。
+  **提交前必须清掉客户端的"读到底部"守卫**（`PcReadPraxis.readHint` 非空时两个方法
+  都只弹 toast 直接返回，POST 不会发生）：置 `articleRead=true`、每题
+  `readQuestions[i]=true`、`readingStayMs>120000`，并滚动文章容器到底部。
+  引擎在 `submit()` 前调用 `satisfy_read_guard()`，并校验确认框真的打开、
+  POST 后路由真的变化，任一失败按 `submit_failed` 记录
+- **题目数据自带答案键**：`jobList[].options_answer` 是服务端下发的正确答
+  案（实测 subject 25 全部 21 题都有），`optionsArray1[].title` 是填空题
+  的正确匹配顺序——运行时可直接据此作答，也可批量采集扩充 `references/answers.json`
 
 ### Vue 访问的陷阱
 
