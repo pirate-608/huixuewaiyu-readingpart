@@ -476,10 +476,6 @@ CHECKPOINT_INTERVAL = 50  # Pause every N articles for user confirmation
 # answer was being composed, so this is deliberately generous.
 AI_TIMEOUT = 600  # Max seconds to wait for AI answers per article
 CAPTCHA_TIMEOUT = 300  # Max seconds to wait for manual CAPTCHA
-NAV_LOAD_WAIT = 1.5  # Seconds to wait after page navigation
-BACK_LOAD_WAIT = 0.8  # Seconds between back-navigation retries
-BACK_RETRIES = 8  # Max retries for back navigation
-CAT_LOAD_RETRIES = 12  # Max retries for category page load
 # Refresh the app token when fewer than this many seconds remain. Checked at
 # article boundaries, not only between subjects (one subject can hold 41 articles).
 TOKEN_REFRESH_MARGIN = 300
@@ -1339,20 +1335,93 @@ async def set_answers(page, answers):
     return result
 
 
+async def satisfy_read_guard(page):
+    """Clear the app's client-side "read before submitting" guard.
+
+    Live source of `PcReadPraxis` (measured 2026-11):
+
+        readHint() {
+            if (!this.articleRead) return "请先将原文阅读到底部";
+            const left = this.jobList.filter((q, i) => !this.readQuestions[i]).length;
+            if (left) return "请将每道题查看到底部（剩余" + left + "题）";
+            return this.readingStayReady ? "" : "请在认真阅读答题后提交";
+        }
+        readingStayReady() { return this.readingStayMs > 120000 }
+        openSubmitConfirm() { this.updateReadingStay();
+                              this.readHint ? message(this.readHint)
+                                            : this.submitting || (this.submitConfirmVisible = true) }
+        confirmSubmit()     { if (this.readHint) return void message(this.readHint); ... }
+
+    So while `readHint` is non-empty, BOTH submit calls return early and only show
+    a toast. None of this state is sent to the server; it is a pure client-side
+    anti-skimming check. The tool scrapes the passage and questions
+    programmatically, so it marks the same state a reader who did the work would:
+    `articleRead`, every `readQuestions[i]`, and the 120 s dwell counter.
+
+    Without this, `confirmSubmit()` resolves successfully without posting and the
+    run would record "submitted" for work that never happened.
+    """
+    try:
+        return await page.evaluate("""() => {
+            function find(vm, d) {
+                if (!vm || d > 14) return null;
+                const n = (vm.$options && (vm.$options.name || vm.$options.__file)) || null;
+                if (n === 'PcReadPraxis') return vm;
+                if (vm.$data && Array.isArray(vm.$data.jobList)) return vm;
+                for (const c of (vm.$children || [])) { const r = find(c, d + 1); if (r) return r; }
+                return null;
+            }
+            const root = document.querySelector('#app');
+            const vm = window.__elangPraxisVm || find(root ? root.__vue__ : null, 0);
+            if (!vm) return { ok: false, error: 'PcReadPraxis not found' };
+            const d = vm.$data || {};
+            d.articleRead = true;
+            const rq = d.readQuestions || {};
+            (d.jobList || []).forEach((q, i) => { rq[i] = true; });
+            d.readQuestions = rq;
+            d.readingStayMs = Math.max(d.readingStayMs || 0, 120001);
+            d.readingStayLastTick = performance.now();
+            // Mirror reaching the bottom; harmless when the data already cleared
+            // the guard, but covers a future guard that watches real scrolling.
+            for (const el of document.querySelectorAll('.article-container, .question-panel')) {
+                try { el.scrollTop = el.scrollHeight; } catch (e) {}
+            }
+            if (vm.$forceUpdate) vm.$forceUpdate();
+            return { ok: true, hint: String(vm.readHint),
+                     jobs: (d.jobList || []).length, articleRead: !!d.articleRead };
+        }""")
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 async def submit(page, dry_run=False):
     """Submit via the app's own two-step confirm.
 
     PC contract (read from the live source):
 
-        openSubmitConfirm()  { if (!submitting) submitConfirmVisible = true }
-        confirmSubmit()      { POST buildSubmitData(); if (code===100)
+        openSubmitConfirm()  { updateReadingStay(); if (readHint) toast; else
+                               submitConfirmVisible = true }
+        confirmSubmit()      { updateReadingStay(); if (readHint) toast & return;
+                               POST buildSubmitData(); if (code===100)
                                POST {id: logId}; if (code===100)
                                router.push({name:'PcPracticeDetailRead', ...}) }
+
+    The dialog only opens once the client-side read guard is cleared, and
+    `confirmSubmit()` silently returns while it is not. So we (a) clear the guard,
+    (b) require the dialog to actually open, and (c) require the route to change
+    after posting. Any of those failing is reported as an error instead of
+    "submitted".
 
     Letting the app build its own payload keeps us correct on question-type
     details we would otherwise have to mirror. `dry_run` opens the confirm dialog
     but does NOT post — used to exercise the whole path safely.
     """
+    guard = await satisfy_read_guard(page)
+    if not guard.get("ok"):
+        return f"error: read guard not cleared ({guard.get('error')})"
+    if guard.get("hint"):
+        print(f"  [elang] submit guard still active: {guard['hint']}")
+
     pre = await page.evaluate("""() => {
         function find(vm, d) {
             if (!vm || d > 14) return null;
@@ -1374,12 +1443,20 @@ async def submit(page, dry_run=False):
         }
         M.openSubmitConfirm.call(vm);
         return { answered: answered, jobs: jobs.length,
-                 confirmVisible: !!vm.$data.submitConfirmVisible };
+                 confirmVisible: !!vm.$data.submitConfirmVisible,
+                 readHint: String(vm.readHint || ''),
+                 articleRead: !!vm.$data.articleRead };
     }""")
     print(f"  [elang] submit: answered {pre.get('answered')}/{pre.get('jobs')}, "
-          f"confirmVisible={pre.get('confirmVisible')}")
+          f"confirmVisible={pre.get('confirmVisible')}, "
+          f"articleRead={pre.get('articleRead')}, readHint={pre.get('readHint')!r}")
     if pre.get("error"):
         return f"error: {pre['error']}"
+    if not pre.get("confirmVisible"):
+        # openSubmitConfirm(） showed a toast instead of the dialog. Posting now
+        # would be a silent no-op, so fail loudly.
+        return (f"error: submit dialog did not open "
+                f"(readHint={pre.get('readHint')!r})")
 
     if dry_run:
         print("  [elang] dry-run: leaving the confirm dialog open, not posting")
@@ -1409,9 +1486,10 @@ async def submit(page, dry_run=False):
     if post == "OK":
         moved = await _wait_until(
             page, f"() => location.hash !== {json.dumps(before_hash)}",
-            timeout_s=8, interval_ms=200, label="submit route change")
+            timeout_s=12, interval_ms=200, label="submit route change")
         if not moved:
-            await page.wait_for_timeout(800)
+            return ("error: submit did not navigate after confirmSubmit "
+                    "(the server may have rejected it)")
     return post
 
 
@@ -1493,66 +1571,6 @@ async def request_ai_answers(article_data):
 # CAPTCHA handling
 # ============================================================
 
-CAPTCHA_KEYWORDS = ["captcha", "验证码", "verification", "请完成验证"]
-
-
-async def detect_captcha(page):
-    """Is a CAPTCHA blocking the current page?
-
-    On the PC layout the captcha is NOT a DOM image — it lives in
-    `PcReadPraxis.$data.imageBase64`, so the old DOM/title heuristics below can
-    never see it. We therefore consult the component first, and only fall back
-    to the DOM checks (which still serve the legacy mobile layout).
-
-    The PC signal is `gated`: an image is waiting AND the questions have not
-    arrived. Both halves matter — the image is produced as part of the normal
-    load, so its mere presence is not a gate; questions appearing is what proves
-    the captcha was passed.
-    """
-    try:
-        vm = await _find_praxis_vm(page)
-        if vm is None:
-            print("[elang] captcha probe: PcReadPraxis not present")
-        else:
-            state = await _captcha_state(page, want_image=False)
-            if state is None:
-                print("[elang] captcha probe: could not read component state")
-            else:
-                # Always surface what we see. Silent detection made the captcha
-                # step look like a hang: the terminal showed nothing at all.
-                print(f"[elang] captcha probe: image={state.get('imageLen', 0)}B "
-                      f"jobs={state.get('jobs')} dom={state.get('domQuestions')} "
-                      f"gated={state.get('gated')} cleared={state.get('cleared')}")
-                if state.get("gated"):
-                    return True
-                if state.get("cleared"):
-                    return False
-    except Exception as e:
-        print(f"[elang] captcha probe failed: {type(e).__name__}: {e}")
-
-    # ---- legacy DOM heuristics ----
-    try:
-        body = await page.evaluate("() => document.body.innerText.substring(0, 500)")
-        for kw in CAPTCHA_KEYWORDS:
-            if kw.lower() in body.lower():
-                print(f"[elang] captcha probe: matched keyword {kw!r}")
-                return True
-    except Exception:
-        pass
-    try:
-        has_img = await page.evaluate("""() => {
-            return !!document.querySelector('img[src*="captcha"],img[src*="code"],img[class*="captcha"],.captcha-img,.verify-img')
-        }""")
-        if has_img:
-            print("[elang] captcha probe: matched a captcha image in the DOM")
-            return True
-    except Exception:
-        pass
-    return False
-
-
-# Track captcha state: once it appears, it persists for the rest of the session
-_captcha_seen = False
 
 # Generic component lookup. The PC app names its pages PcReadIndex / PcReadLearn /
 # PcReadPraxis, so we match on the name (preferred) or on a data-key fingerprint
@@ -1575,27 +1593,6 @@ def _js_find_vm(names, data_keys):
         const root = document.querySelector('#app');
         return find(root ? root.__vue__ : null, 0);
     }""" % (names_js, keys_js)
-
-
-JS_FIND_PRAXIS_VM = _js_find_vm(["PcReadPraxis"], ["jobList", "imageBase64"])
-JS_FIND_LEARN_VM = _js_find_vm(["PcReadLearn"], ["resourceList"])
-JS_FIND_INDEX_VM = _js_find_vm(["PcReadIndex"], ["listData", "categoryId"])
-
-
-async def _wait_for_vm(page, js, timeout_s=40, label="component"):
-    """Poll until a component is present (the SPA mounts it after the route change)."""
-    import time as _t
-    deadline = _t.time() + timeout_s
-    while _t.time() < deadline:
-        try:
-            vm = await page.evaluate(js)
-        except Exception:
-            vm = None
-        if vm is not None:
-            return vm
-        await page.wait_for_timeout(700)
-    print(f"[elang] {label} not found within {timeout_s}s")
-    return None
 
 
 JS_PRAXIS_STATE = """(wantImage) => {
@@ -1636,14 +1633,6 @@ JS_PRAXIS_STATE = """(wantImage) => {
         gated: (!!img && jobs === 0 && domQuestions === 0),
     };
 }"""
-
-async def _find_praxis_vm(page):
-    """Locate the component that owns the captcha state, or None."""
-    try:
-        return await page.evaluate(JS_FIND_PRAXIS_VM)
-    except Exception:
-        return None
-
 
 # Store the located instance on the page so that every reader — including the
 # ones that live in separate `page.evaluate` calls — reads the SAME object.
@@ -1914,7 +1903,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
     after a wrong code, retrying the same attempt is pointless and we stop —
     that guard is what prevents the infinite OCR loop this file used to have.
     """
-    global _captcha_seen
     print("[elang] !! CAPTCHA detected — solving")
 
     # Drop any stale answer before a new request is issued (see
@@ -1950,7 +1938,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
             waited += 2
             st = await _captcha_state(page, want_image=False)
             if st and st.get("cleared"):
-                _captcha_seen = True
                 print(f"[elang] [OK] captcha solved by hand after {waited}s")
                 return True
             if waited % 20 == 0:
@@ -1980,7 +1967,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
         tried.add(guess)
         print(f"[elang] OCR attempt {attempt}/{CAPTCHA_MAX_OCR_ATTEMPTS}: {guess!r}")
         if await _submit_captcha(page, guess):
-            _captcha_seen = True
             print("[elang] [OK] CAPTCHA solved by OCR")
             return True
 
@@ -1991,7 +1977,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
     image = state.get("imageBase64") or ""
     if not image:
         print("[elang] captcha cleared while solving")
-        _captcha_seen = True
         return True
 
     png = _decode_data_uri(image)
@@ -2013,7 +1998,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
         # dialog is gone / the job list appears we are done
         state = await _captcha_state(page, want_image=False)
         if state and state.get("cleared"):
-            _captcha_seen = True
             print("[elang] [OK] CAPTCHA resolved (page is usable)")
             return True
 
@@ -2023,7 +2007,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
             tried.add(answer)
             print(f"[elang] vision/manual answer: {answer!r}")
             if await _submit_captcha(page, answer):
-                _captcha_seen = True
                 print("[elang] [OK] CAPTCHA solved via vision model")
                 return True
             # wrong -> the app refreshes the image; re-issue the request. Poll on
@@ -2051,16 +2034,6 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
 
     print(f"[elang] captcha not solved within {CAPTCHA_VISION_TIMEOUT}s")
     return False
-
-
-async def check_and_handle_captcha(page):
-    """Proactive captcha check — call before entering article if captcha was seen before."""
-    global _captcha_seen
-    if _captcha_seen:
-        print("[elang] Proactive captcha check (seen before)...")
-        if await detect_captcha(page):
-            return await wait_for_captcha(page)
-    return True
 
 
 # ============================================================

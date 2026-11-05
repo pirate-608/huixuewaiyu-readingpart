@@ -4045,4 +4045,51 @@ MCP：
 - 13 个测试脚本全部通过；`test_answer_bank` 覆盖词集预计算后的匹配行为
 - 未改选择器、验证码流程与提交时序；`submit()` 的路由等待有上限与兜底
 
+---
+
+## 57. 修复"读到底部"提交守卫；P3 死代码清理
+
+发现经过：用户观察浏览器进程时注意到一篇文章里有"请先阅读到底部"的提示，询问是否
+有影响。实测 `PcReadPraxis` 组件源码确认 **有影响且严重**：
+
+    readHint() {
+        if (!this.articleRead) return "请先将原文阅读到底部";
+        const left = this.jobList.filter((q, i) => !this.readQuestions[i]).length;
+        if (left) return "请将每道题查看到底部（剩余" + left + "题）";
+        return this.readingStayReady ? "" : "请在认真阅读答题后提交";
+    }
+
+`openSubmitConfirm()` 与 `confirmSubmit()` 在 `readHint` 非空时**只弹 toast 就返回**，
+`confirmSubmit` 的两次 POST 与跳转根本不会执行——而旧代码把 `confirmSubmit` 返回
+"OK" 当成提交成功，等于"看起来提交了、实际什么都没发生"。
+
+修复：
+
+- 新增 `satisfy_read_guard(page)`：置 `articleRead=true`、每题 `readQuestions[i]=true`、
+  `readingStayMs` 抬到 120 秒以上（这些状态只存在于客户端，不进 POST），并滚动
+  文章容器到底部；返回清完后的 `readHint`
+- `submit()` 增加三道硬校验：守卫已清、确认框真的打开（`submitConfirmVisible`）、
+  POST 后路由真的变化（12 秒上限），任一失败按 error 返回，不再误报成功
+- dry-run 实测：subject 25 前 4 篇文章均 `confirmVisible=True, articleRead=True,
+  readHint=''`，`submit(dry_run)` 全部返回 `dry-run`
+
+P3 清理（全部是死代码，删除前逐一 grep 确认无引用）：
+
+- 常量 `NAV_LOAD_WAIT` / `BACK_LOAD_WAIT` / `BACK_RETRIES` / `CAT_LOAD_RETRIES`
+- `_captcha_seen` 标志与只被它使用的 `detect_captcha()`、`check_and_handle_captcha()`；
+  验证码闸门检测已由 `extract_page_content` 的 `blocked` 承担
+- `config.env_map()` / `config.get()`（无任何调用方；凭据解析统一走
+  `load_credentials()`）
+
+题库发现（为后续扩充做依据，见计划）：
+
+- **`jobList[].options_answer` 随题目一起下发**，就是服务端判分的标准答案；
+  实测 subject 25 前 4 篇文章共 21 题全覆盖（`missing=0`）。填空题在
+  `optionsArray1[].title` 里按 label 顺序给出正确答案匹配。这意味着：
+  1) 运行时可以直接读 `options_answer` 自动答题，连题库和 AI 都不需要；
+  2) 写一个采集脚本遍历全部主题，可一次性重建/扩充 `references/answers.json`。
+  是否实现这两个方向由用户决定（非必需项）。
+
+验证：13 个测试脚本全部通过；AGENTS/CLAUDE 文档补充了守卫与答案键的说明。
+
 
