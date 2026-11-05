@@ -3880,4 +3880,26 @@ uv tool install git+https://gitee.com/<用户名>/huixuewaiyu-readingpart.git
 - 令牌若怀疑泄露，在 Gitee 撤销重发并更新 secret。Actions 会对 secret 原文
   打码，但 base64 形式不会，所以 workflow 里不能开 `set -x`
 
+---
+
+## 53. Gitee 镜像已上线，文档补国内地址
+
+镜像已配对成功：`https://gitee.com/huang-youran/huixuewaiyu-readingpart`。
+
+验证：
+
+- `git ls-remote` 显示 Gitee 的 `refs/heads/master` 与本地一致
+- `uv tool install --force "git+https://gitee.com/huang-youran/huixuewaiyu-readingpart.git"`
+  在隔离的 `UV_TOOL_DIR` 里装成功；生成的 `elang` 能跑，`install-browser --check`
+  正确复用系统 Chrome
+
+文档同步：
+
+- README：安装步骤给出 Gitee 地址；"交给 agent"的提示词补镜像链接；常见问题新增
+  "安装时连不上 GitHub"
+- SKILL.md：安装一节补 Gitee 备用地址
+- SETUP.md：第 1 步补 Gitee 备用地址
+
+镜像仓库是只读副本，问题与 PR 仍以 GitHub 为准；同步可能滞后几分钟。
+
 

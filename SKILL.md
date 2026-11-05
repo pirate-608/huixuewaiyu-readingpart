@@ -243,6 +243,12 @@ elang init-env               # 生成 .env 模板
 elang doctor                 # 到这一步应为 All good.
 ```
 
+GitHub 访问不稳定时，把第一条换成 Gitee 镜像（内容相同，随提交同步）：
+
+```bash
+uv tool install git+https://gitee.com/huang-youran/huixuewaiyu-readingpart.git
+```
+
 装 skill（让 agent 能发现本契约）：
 
 ```bash
