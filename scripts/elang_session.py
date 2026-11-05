@@ -432,14 +432,45 @@ class ElangSession:
                 "validation_failed": True,
             }
 
-        res = await er.set_answers(self.page, answers)
+        try:
+            res = await er.set_answers(self.page, answers)
+        except Exception as e:
+            res = {"error": f"{type(e).__name__}: {e}"}
+
+        # Never submit what did not land: a missing component or a skipped job
+        # would otherwise be recorded as a successful submission.
+        if not er._answers_applied(res, self.content["questions"]):
+            self.error = f"answers were not applied: {res}"
+            return {
+                "state": self.state,
+                "blocking": False,
+                "next_actions": NEXT.get(self.state, []),
+                "error": self.error,
+                "answers_failed": True,
+            }
+
         echo = await self._read_back(answers)
-        submit_result = await er.submit(self.page, dry_run=self.dry_run)
+        try:
+            submit_result = await er.submit(self.page, dry_run=self.dry_run)
+        except Exception as e:
+            submit_result = f"threw: {type(e).__name__}: {e}"
+        ok = (submit_result == "dry-run") if self.dry_run else (submit_result == "OK")
+        if not ok:
+            self.state = State.ERROR
+            self.error = f"submit did not complete: {submit_result}"
+            return self.envelope(result={
+                "submitted": False,
+                "dry_run": self.dry_run,
+                "set_answers": res,
+                "submit": submit_result,
+                "echo": echo,
+            })
 
         self.submitted += 1
         self.state = State.SUBMITTED
         self.error = None
-        incomplete = [k for k, v in echo.items() if not v.get("filled")]
+        incomplete = [k for k, v in echo.items()
+                      if isinstance(v, dict) and not v.get("filled")]
         return self.envelope(
             result={
                 "submitted": not self.dry_run,
@@ -483,7 +514,7 @@ class ElangSession:
                 return out;
             }""", [q["index"] for q in qs])
         except Exception as e:
-            return {"error": f"{type(e).__name__}: {e}"}
+            return {"__error__": f"{type(e).__name__}: {e}"}
 
         echo = {}
         for q in qs:
@@ -518,7 +549,15 @@ class ElangSession:
             return self._fail(f"nothing to skip (state={self.state})")
         if self.state == State.AWAITING_CAPTCHA:
             return self._fail("cannot skip while a captcha is pending")
-        result = await er.submit(self.page, dry_run=self.dry_run)
+        try:
+            result = await er.submit(self.page, dry_run=self.dry_run)
+        except Exception as e:
+            result = f"threw: {type(e).__name__}: {e}"
+        ok = (result == "dry-run") if self.dry_run else (result == "OK")
+        if not ok:
+            self.state = State.ERROR
+            self.error = f"submit did not complete: {result}"
+            return self.envelope(result={"submitted": False, "submit": result})
         self.submitted += 1
         self.state = State.SUBMITTED
         return self.envelope(result={"submitted": not self.dry_run, "submit": result})

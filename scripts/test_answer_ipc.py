@@ -86,8 +86,10 @@ try:
     print("\n=== answer by letter ===")
     rc, out = run(ipc, "answer", "0=B")
     sig = signal(ipc)
-    check("choice letter -> option index", sig == {"status": "answers_ready",
-                                                   "answers": [[0, 1]]}, str(sig))
+    check("choice letter -> option index",
+          sig is not None and sig.get("answers") == [[0, 1]], str(sig))
+    check("signal names the pending article",
+          sig is not None and sig.get("article_number") == 7, str(sig))
 
     print("\n=== fill: letters map to option VALUES ===")
     rc, out = run(ipc, "answer", "0=A", "1=A,B")
@@ -109,6 +111,19 @@ try:
     check("unknown question index rejected", rc == 1 and "not in the pending" in out)
     check("nothing written on rejection", signal(ipc) is None)
 
+    rc, out = run(ipc, "answer", "9=A,B")
+    check("comma answer with unknown index rejected",
+          rc == 1 and "not in the pending" in out, out.strip()[-80:])
+    check("no signal for the comma rejection", signal(ipc) is None)
+
+    rc, out = run(ipc, "answer", "0=A,B")
+    check("comma answer on a choice question rejected",
+          rc == 1 and "choice question" in out)
+
+    rc, out = run(ipc, "answer", "--raw", '[[9,0]]')
+    check("raw answer with unknown index rejected", rc == 1)
+    check("no signal for the raw rejection", signal(ipc) is None)
+
     rc, out = run(ipc, "answer", "0=Z")
     check("unknown option letter rejected", rc == 1 and "no option" in out)
 
@@ -120,6 +135,14 @@ try:
 
     rc, out = run(ipc, "answer", "0")
     check("malformed pair rejected", rc == 1 and "qIdx=VALUE" in out)
+
+    print("\n=== --raw requires a waiting run ===")
+    write_request(ipc, status="checkpoint")
+    Path(ipc, "elang_signal.json").unlink(missing_ok=True)
+    rc, out = run(ipc, "answer", "--raw", '[[0,0]]')
+    check("raw answer rejected during a checkpoint pause",
+          rc == 1 and "not waiting" in out, out.strip()[-80:])
+    check("no signal during a checkpoint pause", signal(ipc) is None)
 
     print("\n=== control verbs ===")
     for verb, status in (("skip", "skip"), ("continue", "continue"), ("stop", "stop")):

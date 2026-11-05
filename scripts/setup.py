@@ -134,11 +134,14 @@ def main():
     print("=" * 64)
     print(f"repo: {REPO}")
 
+    # Collect every step's result: a bootstrap that prints FAILED but exits 0 is
+    # useless to an agent or CI checking the exit code.
+    ok = True
     if not args.no_tool:
-        install_tool(args.check)
+        ok = install_tool(args.check) and ok
     if not args.no_skill:
-        register_skill(args.check)
-    report()
+        ok = register_skill(args.check) and ok
+    ok = report() and ok
 
     print("\n" + "=" * 64)
     print("Next steps")
@@ -149,7 +152,9 @@ def main():
     print("       elang doctor            # follow any command it prints")
     print("  3. Use it:")
     print("       elang run batch-all     # or ask your agent to run the skill")
-    return 0
+    if not ok:
+        print("\n  FAILED: one or more steps did not complete (see above).")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

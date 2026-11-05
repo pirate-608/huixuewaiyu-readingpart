@@ -3902,4 +3902,50 @@ uv tool install git+https://gitee.com/<用户名>/huixuewaiyu-readingpart.git
 
 镜像仓库是只读副本，问题与 PR 仍以 GitHub 为准；同步可能滞后几分钟。
 
+---
+
+## 54. P0 加固：隐私、假成功与状态文件
+
+实施审查计划里的 Phase 0（8 项）。原则：正常路径的站点交互与输出不变，只修正失败
+路径被误报、秘密被打印、状态文件损坏这几类问题。
+
+隐私：
+
+- `elang doctor --json` 改为脱敏视图，只保留 `ok`、环境文件来源和 `username_set` /
+  `password_set`，不再包含学号与密码
+- `setup-mcp` 不再打印整份配置的文本 diff（重新序列化会让其他 server 的密钥变成
+  "新增行"），只打印本次写入的条目；DSH 的 `cordis.patch.yml` 改为按 `- id:` 块
+  文本插入/替换，保留注释与原有缩进
+
+假成功：
+
+- CLI 与 MCP 两条路径都检查 `set_answers()` 与 `submit()` 的结果。新增
+  `answers_incomplete` / `submit_failed` 状态，失败不计数、不标记完成
+- `selectOption` 单条异常降级为 note，不再中断整批
+- `_read_back()` 的 error 结构不再触发 `AttributeError`；`skip_article` 同样校验
+- 主题只有无失败结果时才标记完成；读到空文章列表也不再标记完成（可能只是没加载
+  出来）
+
+状态与退出码：
+
+- 检查点改为 `.tmp` + `os.replace` 原子写，读取损坏时告警并从头开始
+- `setup.py` 汇总各步结果，失败返回 1
+- `install-skill --check` 任一目标缺失返回 1；junction 识别为 `linked`
+- IPC：`answer` 的逗号分支与 `--raw` 都校验题号/类型/状态；信号携带
+  `article_number` 与 `url`，reader 丢弃不属于当前文章的迟到信号；torn read 增加
+  `UnicodeDecodeError`
+
+验证：
+
+- 11 个测试脚本全部通过：新增 `test_p0_safety` 19 项、`test_install_skill` 13 项；
+  `test_setup_mcp` 38 项（新增"注释保留"与"不打印其他 server 密钥"）、
+  `test_answer_ipc` 28 项（新增无效逗号答案与 `--raw` 门禁）
+- 真实 dry-run 一篇：答案 5+1/6 全部应用，`submit` 返回 `dry-run`，信号带
+  `article_number=1`，运行正常结束，无假失败
+- `elang doctor --json` 实跑确认学号与密码不出现在输出里
+- DSH 配置实测：追加与替换两条路径都保留注释，其他插件条目不变
+
+未做（留给 P1/P2）：异常路径的 `try/finally` 关浏览器、登录失败传播、每篇 token
+检查、IPC 发布顺序、提交后 4 秒固定睡眠、`mode_solve` 的验证码闸门等。
+
 
