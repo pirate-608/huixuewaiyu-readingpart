@@ -128,13 +128,28 @@ def build_server():
     mcp = FastMCP("elang-reading")
 
     def quiet(fn):
-        """Wrap a tool so any progress printing cannot corrupt the protocol."""
+        """Wrap a tool so progress printing cannot corrupt the protocol.
+
+        Also converts an unexpected exception into a normal tool result: the
+        caller gets a JSON envelope with `state: "error"` instead of an MCP
+        transport-level failure, and the session can be stopped cleanly.
+        """
         import functools
 
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
             with quiet_stdout():
-                return await fn(*args, **kwargs)
+                try:
+                    return await fn(*args, **kwargs)
+                except Exception as e:
+                    print(f"[mcp] tool {fn.__name__} raised: "
+                          f"{type(e).__name__}: {e}", file=sys.stderr)
+                    return _envelope({
+                        "state": "error",
+                        "blocking": False,
+                        "next_actions": ["elang_status", "elang_stop"],
+                        "error": f"{type(e).__name__}: {e}",
+                    })
         return wrapper
 
     # ------------------------------------------------------------ lifecycle
@@ -283,7 +298,16 @@ def main():
     mcp = build_server()
     if mcp is None:
         return 1
-    mcp.run()
+    try:
+        mcp.run()
+    finally:
+        # Do not leave a Chromium process and a locked profile behind when the
+        # host shuts the server down.
+        try:
+            if SRV.session is not None:
+                asyncio.run(SRV.session.stop())
+        except Exception:
+            pass
     return 0
 
 

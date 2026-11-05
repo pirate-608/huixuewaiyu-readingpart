@@ -479,6 +479,9 @@ NAV_LOAD_WAIT = 1.5  # Seconds to wait after page navigation
 BACK_LOAD_WAIT = 0.8  # Seconds between back-navigation retries
 BACK_RETRIES = 8  # Max retries for back navigation
 CAT_LOAD_RETRIES = 12  # Max retries for category page load
+# Refresh the app token when fewer than this many seconds remain. Checked at
+# article boundaries, not only between subjects (one subject can hold 41 articles).
+TOKEN_REFRESH_MARGIN = 300
 
 
 # ---- Durable state helpers ----
@@ -553,6 +556,32 @@ def _signal_matches(data, expected_article_number):
         return True
     got = (data or {}).get("article_number")
     return got is None or str(got) == str(expected_article_number)
+
+
+# ---- Process-level browser cleanup ----
+# The CLI modes close the context on their happy paths, but an exception used to
+# unwind without closing it: the persistent profile could keep its lock and the
+# browser process lingered. The dispatch wrapper in main() closes whatever is
+# still open, whether the mode returned normally or raised.
+_ACTIVE_CONTEXT = None
+
+
+async def _close_active_context():
+    global _ACTIVE_CONTEXT
+    ctx, _ACTIVE_CONTEXT = _ACTIVE_CONTEXT, None
+    if ctx is not None:
+        try:
+            await ctx.close()
+        except Exception:
+            pass
+
+
+async def _run_guarded(coro):
+    """Run a mode coroutine, always closing the browser context afterwards."""
+    try:
+        return await coro
+    finally:
+        await _close_active_context()
 
 # ---- Captcha: automatic OCR + vision-model fallback ----
 # ddddocr is a small offline model and is simply wrong on some of these noisy
@@ -1371,15 +1400,20 @@ async def submit(page, dry_run=False):
 # ============================================================
 
 
-async def wait_for_ai(timeout=AI_TIMEOUT, expect_article_number=None):
+async def wait_for_ai(timeout=AI_TIMEOUT, expect_article_number=None,
+                      clear_at_start=True):
     """Wait for the answering side to write SIGNAL_FILE. Returns data or None.
 
     When `expect_article_number` is given, a signal that names a different
     article is discarded. That closes the late-answer hole: an answer composed
     for article A must not be applied to article B after A timed out.
+
+    `clear_at_start=False` is used by callers that publish a request: they must
+    clear the channel BEFORE publishing, otherwise a fast answer written between
+    the two steps would be deleted and the run would stall for the full timeout.
     """
-    if os.path.exists(SIGNAL_FILE):
-        os.remove(SIGNAL_FILE)
+    if clear_at_start:
+        _remove_file(SIGNAL_FILE)
 
     waited = 0
     while waited < timeout:
@@ -1418,10 +1452,11 @@ async def request_ai_answers(article_data):
     run has none, so the message says how to stop needing it rather than leaving
     the user staring at a silent ten-minute wait.
     """
-    with open(CURRENT_FILE, "w", encoding="utf-8") as f:
-        json.dump(article_data, f, ensure_ascii=False, indent=2)
-    if os.path.exists(SIGNAL_FILE):
-        os.remove(SIGNAL_FILE)
+    # Clear the channel BEFORE publishing: if the answerer is fast enough to
+    # answer between the two steps, publishing first and clearing second would
+    # delete that answer and stall for the full timeout.
+    _remove_file(SIGNAL_FILE)
+    _atomic_write_json(CURRENT_FILE, article_data)
     print("  [ANSWER NEEDED] the bank did not cover this article.")
     print(f"    request written to: {CURRENT_FILE}")
     print(f"    the answering side should read it, then write {SIGNAL_FILE}:")
@@ -1429,7 +1464,8 @@ async def request_ai_answers(article_data):
     print("    with this tool that is:  elang pending   /   elang answer ...")
     print(f"    timeout: {AI_TIMEOUT}s")
     return await wait_for_ai(
-        expect_article_number=article_data.get("article_number"))
+        expect_article_number=article_data.get("article_number"),
+        clear_at_start=False)
 
 
 # ============================================================
@@ -1717,6 +1753,10 @@ def _write_captcha_request(png_bytes):
     """
     try:
         Path(CAPTCHA_IPC_DIR).mkdir(parents=True, exist_ok=True)
+        # A leftover code from the previous captcha would be picked up by the
+        # waiter and submitted against THIS image, refreshing it and invalidating
+        # the image_path we are about to publish.
+        _remove_file(CAPTCHA_ANSWER_FILE)
         if png_bytes:
             with open(CAPTCHA_IMAGE_FILE, "wb") as f:
                 f.write(png_bytes)
@@ -1848,6 +1888,10 @@ async def wait_for_captcha(page, timeout=CAPTCHA_TIMEOUT):
     """
     global _captcha_seen
     print("[elang] !! CAPTCHA detected — solving")
+
+    # Drop any stale answer before a new request is issued (see
+    # _write_captcha_request for why this must happen).
+    _remove_file(CAPTCHA_ANSWER_FILE)
 
     if not await _focus_captcha_vm(page):
         print("[elang] no praxis component with captcha state found")
@@ -2006,6 +2050,14 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
     done_already = sum(1 for a in article_infos if a.get("isCompleted"))
     print(f"[elang] {done_already}/{total} already completed - will skip")
 
+    async def back_or_abort():
+        """Return to the article list, or abort the subject when it is lost."""
+        if await go_back_to_learn(page, learn_hash, subject_id):
+            return True
+        print("  [FAIL] article list did not come back; aborting this subject")
+        results.append({"name": name, "status": "list_lost"})
+        return False
+
     for i, info in enumerate(article_infos):
         name = info["name"]
         article_num = start_counter + i + 1
@@ -2015,6 +2067,21 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
             results.append({"name": name, "status": "skipped_completed"})
             continue
 
+        # The app token lives ~2 h. Refreshing only between subjects let a single
+        # long subject expire halfway and fail every remaining article. Check at
+        # the article boundary; a refresh navigates away, so return to the list.
+        left = await token_seconds_left(page)
+        if left is not None and left < TOKEN_REFRESH_MARGIN:
+            print(f"[elang] app token expires in {left / 60:.0f} min — refreshing "
+                  f"before {name}")
+            if not await ensure_fresh_token(
+                    page, "https://elang.zju.edu.cn/#/pc/read/index"):
+                print("  [FAIL] token refresh failed; aborting this subject")
+                results.append({"name": name, "status": "auth_failed"})
+                break
+            if not await back_or_abort():
+                break
+
         print(f"\n{'=' * 50}")
         print(f"[{article_num}] {i+1}/{total}: {name}")
         print(f"{'=' * 50}")
@@ -2023,7 +2090,8 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
         if not log_id or not resources_id:
             print("  SKIP: no praxis URL generated")
             results.append({"name": name, "status": "no_url"})
-            await go_back_to_learn(page, learn_hash, subject_id)
+            if not await back_or_abort():
+                break
             continue
 
         # Read the page. The captcha check must be immediate: waiting for the
@@ -2049,7 +2117,8 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
         if not content.get("questions"):
             print(f"  SKIP: no questions (blocked={content.get('blocked')})")
             results.append({"name": name, "status": "no_questions"})
-            await go_back_to_learn(page, learn_hash, subject_id)
+            if not await back_or_abort():
+                break
             continue
 
         questions = content["questions"]
@@ -2064,7 +2133,8 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
             print(f"  SKIP: {len(unsupported)} non-choice question(s) "
                   f"(type_id {sorted({q['type_id'] for q in unsupported})})")
             results.append({"name": name, "status": "unsupported_types"})
-            await go_back_to_learn(page, learn_hash, subject_id)
+            if not await back_or_abort():
+                break
             continue
 
         Path(SCRATCH_DIR).mkdir(parents=True, exist_ok=True)
@@ -2150,7 +2220,8 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
             print("  [FAIL] AI timeout")
             results.append({"name": name, "status": "timeout"})
 
-        await go_back_to_learn(page, learn_hash, subject_id)
+        if not await back_or_abort():
+            break
 
     return results
 
@@ -2210,6 +2281,7 @@ async def open_browser(playwright):
     There is no separate `browser` object to close with this API — the context is
     the top-level handle, so callers close the context.
     """
+    global _ACTIVE_CONTEXT
     # Lazily load credentials and the answer bank on first browser start, so that
     # merely importing this module has no side effects.
     _ensure_credentials(prompt_ok=False)
@@ -2254,6 +2326,7 @@ async def open_browser(playwright):
     Path(BROWSER_PROFILE_DIR).mkdir(parents=True, exist_ok=True)
     try:
         context = await playwright.chromium.launch_persistent_context(**kwargs)
+        _ACTIVE_CONTEXT = context
     except Exception as e:
         msg = str(e)
         if "Executable doesn't exist" in msg or "playwright install" in msg:
@@ -2416,9 +2489,10 @@ async def ensure_logged_in(page, url, restored):
     if await session_is_live(page):
         if restored:
             print("[elang] saved session is live — CAS skipped")
-        else:
-            await finish_login(page)
-        return True
+            return True
+        # A fresh login must be proven, not assumed: finish_login returns False
+        # when the token never appears, and callers used to ignore that.
+        return await finish_login(page)
 
     # Not authenticated. Whether we replayed a session or not, the app's storage
     # may hold an EXPIRED token, and that must be wiped before trying to log in.
@@ -2477,7 +2551,11 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
         context, page, restored = await open_browser(p)
 
         # Navigate to reading index (re-logs in if a saved session is stale)
-        await ensure_logged_in(page, "https://elang.zju.edu.cn/#/pc/read/index", restored)
+        if not await ensure_logged_in(page, "https://elang.zju.edu.cn/#/pc/read/index",
+                                      restored):
+            print("[elang] login failed; aborting this run.")
+            await context.close()
+            return
 
         # The route change only MOUNTS PcReadIndex; its subject list is fetched
         # afterwards. Reading immediately gets an empty list and looked like
@@ -2707,12 +2785,12 @@ async def mode_batch_all(start_cat=0, dry_run=False, limit=None,
                 print(f"{'='*60}")
 
                 cp_data = {"status": "checkpoint", "total_submitted": total_submitted}
-                with open(CURRENT_FILE, "w", encoding="utf-8") as f:
-                    json.dump(cp_data, f, ensure_ascii=False)
-                if os.path.exists(SIGNAL_FILE):
-                    os.remove(SIGNAL_FILE)
+                # Same ordering rule as request_ai_answers: clear first, publish
+                # second, so a fast reply cannot be deleted.
+                _remove_file(SIGNAL_FILE)
+                _atomic_write_json(CURRENT_FILE, cp_data)
 
-                data = await wait_for_ai(timeout=3600)
+                data = await wait_for_ai(timeout=3600, clear_at_start=False)
                 if data and data.get("status") == "stop":
                     print("[elang] Stopped. Progress saved.")
                     stop_requested = True
@@ -2744,9 +2822,21 @@ async def mode_solve(url, dry_run=False):
 
     async with async_playwright() as p:
         context, page, restored = await open_browser(p)
-        await ensure_logged_in(page, url, restored)
+        if not await ensure_logged_in(page, url, restored):
+            print("[elang] login failed; aborting.")
+            await context.close()
+            return
 
         content = await extract_page_content(page)
+        if content.get("blocked"):
+            print("[elang] captcha pending on entry — solving")
+            if await wait_for_captcha(page):
+                content = await extract_page_content(page)
+        if not content.get("questions"):
+            print("[elang] no questions available (unresolved captcha or empty "
+                  "page); aborting instead of waiting for an answer.")
+            await context.close()
+            return
 
         print(f"\n{'='*60}")
         print(f"TITLE: {content['title']}")
@@ -2822,7 +2912,10 @@ async def mode_batch(learn_url, dry_run=False):
 
     async with async_playwright() as p:
         context, page, restored = await open_browser(p)
-        await ensure_logged_in(page, learn_url, restored)
+        if not await ensure_logged_in(page, learn_url, restored):
+            print("[elang] login failed; aborting.")
+            await context.close()
+            return
         learn_hash = learn_url.split("#", 1)[1] if "#" in learn_url else ""
 
         for _ in range(CAT_LOAD_RETRIES):
@@ -2879,18 +2972,18 @@ def main():
 
     if mode == "solve":
         url = sys.argv[2] if len(sys.argv) > 2 else input("Praxis URL: ")
-        asyncio.run(mode_solve(url, dry_run=dry_run))
+        asyncio.run(_run_guarded(mode_solve(url, dry_run=dry_run)))
     elif mode == "batch":
         url = sys.argv[2] if len(sys.argv) > 2 else input("Learn URL: ")
-        asyncio.run(mode_batch(url, dry_run=dry_run))
+        asyncio.run(_run_guarded(mode_batch(url, dry_run=dry_run)))
     elif mode == "batch-all":
         # Only treat argv[2] as a start index when it is a bare number, so flags
         # like --limit are not mistaken for it.
         arg2 = sys.argv[2] if len(sys.argv) > 2 else None
         start_cat = int(arg2) - 1 if arg2 and arg2.isdigit() else 0
-        asyncio.run(mode_batch_all(start_cat, dry_run=dry_run, limit=limit,
-                                   subjects_only=subjects_only,
-                                   only_subject_ids=only_ids))
+        asyncio.run(_run_guarded(mode_batch_all(
+            start_cat, dry_run=dry_run, limit=limit,
+            subjects_only=subjects_only, only_subject_ids=only_ids)))
     elif mode == "captcha-solve":
         # Vision hand-off helper. The script writes a request while it waits;
         # a vision model (or the user) reads the image and writes the answer.

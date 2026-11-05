@@ -129,12 +129,32 @@ class ElangSession:
             ok = await er.ensure_logged_in(
                 self.page, "https://elang.zju.edu.cn/#/pc/read/index", restored)
             if not ok:
+                await self._cleanup_browser()
                 return self._fail("login failed")
             self.state = State.RUNNING
             self.error = None
             return self.envelope()
         except Exception as e:
+            # A failed start used to leave Playwright and the browser running
+            # until process exit, holding the persistent profile.
+            await self._cleanup_browser()
             return self._fail(f"{type(e).__name__}: {e}")
+
+    async def _cleanup_browser(self):
+        """Best-effort teardown used on failed starts."""
+        try:
+            if self.context is not None:
+                await self.context.close()
+        except Exception as e:
+            print(f"[session] cleanup close failed: {type(e).__name__}: {e}")
+        try:
+            if self._pw is not None:
+                await self._pw.stop()
+        except Exception:
+            pass
+        self.context = None
+        self.page = None
+        self._pw = None
 
     async def stop(self):
         """Close the browser. Never kills processes by name."""

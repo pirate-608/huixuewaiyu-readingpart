@@ -24,7 +24,7 @@ and `~/.codex/config.toml` holds API keys in plaintext)
 
 Usage
 -----
-    elang setup-mcp --host claude              # project ./.mcp.json
+    elang setup-mcp --host claude              # <project>/.mcp.json (walks up from cwd)
     elang setup-mcp --host claude --scope global
     elang setup-mcp --host dsh                 # edits the DSH profile patch
     elang setup-mcp --host codex
@@ -41,11 +41,13 @@ and the sync API behaves the same. See CHANGELOG.md §24.
 """
 import argparse
 import datetime
+import importlib.util
 import json
 import os
 import re
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -69,11 +71,22 @@ def elang_command():
     """The console script this package installs.
 
     Prefer the installed `elang` (works for a `uv tool install`, which has no repo
-    checkout). Fall back to `python -m elang.cli` only if it is missing.
+    checkout). Fall back to `python -m elang.cli` only when that module actually
+    exists. Registering a command that cannot start leaves the host with a server
+    that never connects, so report it instead of guessing.
     """
     exe = shutil.which("elang")
     if exe:
         return exe, ["mcp"]
+    try:
+        spec = importlib.util.find_spec("elang.cli")
+    except (ImportError, ValueError):
+        spec = None
+    if spec is None:
+        print("ERROR: no `elang` command on PATH and `elang.cli` is not "
+              "importable; install the package first "
+              "(uv tool install .)", file=sys.stderr)
+        return None
     return sys.executable, ["-m", "elang.cli", "mcp"]
 
 
@@ -85,10 +98,26 @@ def _backup(path: Path):
 
 
 def _atomic_write(path: Path, text: str):
-    """Write via a sibling temp file then replace, so a crash cannot truncate."""
-    tmp = path.with_name(path.name + ".tmp-write")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    """Write via a unique sibling temp file then replace.
+
+    The temp file lives in the SAME directory so `os.replace` stays atomic. It is
+    created with `mkstemp`, because a fixed name left debris behind after a
+    failure and let two concurrent runs clobber each other's temp file.
+    """
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".",
+                                suffix=".tmp")
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        # Never leave the temp file behind, whatever went wrong.
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 def _apply(path: Path, new_text: str, verify, dry_run: bool, label: str,
@@ -114,7 +143,13 @@ def _apply(path: Path, new_text: str, verify, dry_run: bool, label: str,
 
     path.parent.mkdir(parents=True, exist_ok=True)
     bak = _backup(path) if path.exists() else None
-    _atomic_write(path, new_text)
+    try:
+        _atomic_write(path, new_text)
+    except OSError as e:
+        # A locked target (a running agent holds the config file) must not abort
+        # the remaining hosts: report it and let the caller keep going.
+        print(f"  [{label}] FAILED: {type(e).__name__}: {e}")
+        return False, added
 
     try:
         verify(path)
@@ -137,13 +172,39 @@ def _apply(path: Path, new_text: str, verify, dry_run: bool, label: str,
 # --------------------------------------------------------------- per host
 
 def entry_claude():
-    cmd, args = elang_command()
+    resolved = elang_command()
+    if resolved is None:
+        return None
+    cmd, args = resolved
     return {"command": cmd, "args": args}
+
+
+def _project_root() -> Path:
+    """Nearest ancestor of cwd that looks like a project root, else cwd.
+
+    An agent may be started in a subdirectory of the project. Registering
+    `<cwd>/.mcp.json` then puts the file where the host never looks, so walk up
+    the way the hosts themselves resolve a project.
+    """
+    start = Path.cwd().resolve()
+    cur = start
+    for _ in range(30):
+        for marker in (".git", "pyproject.toml", "SKILL.md", ".mcp.json"):
+            if (cur / marker).exists():
+                return cur
+        if cur.parent == cur:
+            break
+        cur = cur.parent
+    return start
 
 
 def patch_claude(scope, dry_run):
     path = ((HOME / ".claude" / ".mcp.json") if scope == "global"
-            else (Path.cwd() / ".mcp.json"))
+            else (_project_root() / ".mcp.json"))
+    entry = entry_claude()
+    if entry is None:
+        print("  [claude] cannot register: no runnable `elang` command")
+        return False
     cfg = {}
     if path.exists():
         try:
@@ -153,7 +214,6 @@ def patch_claude(scope, dry_run):
                   f"{type(e).__name__}: {e}")
             return False
     servers = cfg.setdefault("mcpServers", {})
-    entry = entry_claude()
     servers[CLAUDE_KEY] = entry
     text = json.dumps(cfg, ensure_ascii=False, indent=2) + "\n"
     preview = json.dumps({"mcpServers": {CLAUDE_KEY: entry}},
@@ -178,7 +238,10 @@ def _yaml():
 
 
 def entry_dsh():
-    cmd, args = elang_command()
+    resolved = elang_command()
+    if resolved is None:
+        return None
+    cmd, args = resolved
     return {
         "id": DSH_ID,
         "name": DSH_PLUGIN,
@@ -286,8 +349,11 @@ def patch_dsh(scope, dry_run):
         return False
 
     yaml = _yaml()
-    old = path.read_text(encoding="utf-8") if path.exists() else "[]"
     entry = entry_dsh()
+    if entry is None:
+        print("  [dsh] cannot register: no runnable `elang` command")
+        return False
+    old = path.read_text(encoding="utf-8") if path.exists() else "[]"
 
     if yaml is not None:
         try:
@@ -374,7 +440,10 @@ def _dsh_yaml_block(entry):
 
 
 def entry_codex():
-    cmd, args = elang_command()
+    resolved = elang_command()
+    if resolved is None:
+        return None
+    cmd, args = resolved
     return {"command": cmd, "args": args, "startup_timeout_sec": TIMEOUT_S}
 
 
@@ -395,9 +464,12 @@ def _codex_block(entry):
 
 
 def patch_codex(scope, dry_run):
+    entry = entry_codex()
+    if entry is None:
+        print("  [codex] cannot register: no runnable `elang` command")
+        return False
     path = (Path(os.environ.get("CODEX_HOME") or (HOME / ".codex"))
             / "config.toml")
-    entry = entry_codex()
     old = path.read_text(encoding="utf-8") if path.exists() else ""
 
     header = f"[mcp_servers.{SERVER_NAME}]"
@@ -465,7 +537,12 @@ def main():
     args = ap.parse_args()
 
     if args.show:
-        cmd, cmdargs = elang_command()
+        resolved = elang_command()
+        if resolved is None:
+            print("ERROR: cannot build an MCP entry without a runnable "
+                  "`elang` command")
+            return 1
+        cmd, cmdargs = resolved
         print(json.dumps({
             "claude": {"mcpServers": {CLAUDE_KEY: entry_claude()}},
             "dsh": entry_dsh(),
