@@ -21,6 +21,7 @@ never override what the host supplied.
 
 No upward directory walking, no agent detection, no pointer files.
 """
+import functools
 import os
 import re
 import shutil
@@ -360,8 +361,16 @@ def exe_version(path):
     Windows: read the PE version resource (the exe detaches from the console, so
     `--version` prints nothing there). macOS/Linux: ask the binary. A failure
     here is cosmetic — detection never depends on it.
+
+    Cached per path: one `doctor`/`install-browser` run probes both browsers
+    several times and each probe reopens the PE resource or spawns the binary.
     """
-    path = Path(path)
+    return _exe_version_cached(str(path))
+
+
+@functools.lru_cache(maxsize=64)
+def _exe_version_cached(path_str):
+    path = Path(path_str)
     if os.name == "nt":
         return _windows_file_version(path)
     try:
@@ -419,8 +428,13 @@ def _strip_quotes(value):
     return v
 
 
+@functools.lru_cache(maxsize=1)
 def _windows_app_paths():
-    """Executables advertised by the registry's App Paths keys."""
+    """Executables advertised by the registry's App Paths keys.
+
+    Cached for the process: one run calls detection several times (choice,
+    describe, doctor), and each call used to reopen four registry keys.
+    """
     try:
         import winreg
     except Exception:
@@ -580,10 +594,11 @@ def describe_browser():
     lines.append(f"shared cache : {shared_browsers_dir()}  "
                  f"({'present' if shared_browsers_dir().is_dir() else 'absent'})")
     lines.append(f"usable       : {has_browser()}")
-    for b in system_browsers():
+    browsers = system_browsers()          # one scan, not one scan per line
+    for b in browsers:
         lines.append(f"system {b['channel']:<10}: {b['path']}"
                      f"  v{b['version'] or '?'}")
-    if not system_browsers():
+    if not browsers:
         lines.append("system       : no installed Chrome/Edge found")
     ch = browser_choice()
     detail = ch["label"] + (f" v{ch['version']}" if ch["version"] else "")
