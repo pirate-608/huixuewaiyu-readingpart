@@ -3948,4 +3948,67 @@ uv tool install git+https://gitee.com/<用户名>/huixuewaiyu-readingpart.git
 未做（留给 P1/P2）：异常路径的 `try/finally` 关浏览器、登录失败传播、每篇 token
 检查、IPC 发布顺序、提交后 4 秒固定睡眠、`mode_solve` 的验证码闸门等。
 
+---
+
+## 55. P1 加固：竞态、卡死、恢复与配置编辑
+
+实施审查计划里的 Phase 1。正常路径行为不变；这一批解决的是「失败后不恢复、竞态
+吞答案、诊断命令卡死、配置编辑丢内容」这一类问题。
+
+主引擎与会话：
+
+- 浏览器 context 有进程级兜底：`main()` 的三个模式经 `_run_guarded` 运行，
+  无论正常返回还是抛异常都会关闭 context；`ElangSession.start()` 失败时清理
+  Playwright 与 context
+- 登录失败不再被吞：`ensure_logged_in()` 返回 `finish_login()` 的真实结果，
+  三个 CLI 模式据此中止
+- token 改为在每篇文章边界检查（阈值 300 秒），刷新后回到文章列表；一次刷新失败
+  就中止本主题，而不是让剩余文章全部假失败
+- `go_back_to_learn()` 失败会中止本主题并记 `list_lost`；`mode_solve` 补上验证码
+  闸门与答案应用/提交校验
+- 验证码：新请求发布前删除旧答案文件（旧代码残留会被当成新图答案提交）
+
+IPC 与并发：
+
+- `request_ai_answers()` 与 50 篇检查点都改为「先删信号、再原子写 CURRENT」，
+  避免快速应答被删除；`wait_for_ai(clear_at_start=False)` 不再二次清空
+- `answer_ipc._send()` 用 `.tmp` + `os.replace` 原子发布，杜绝半写文件
+- 迟到信号按 `article_number` 丢弃；torn read 捕获 `UnicodeDecodeError`
+
+MCP：
+
+- 工具异常转为 `state=error` 的 JSON 信封，而不是协议层错误
+- 服务器退出时 best-effort 关闭会话与浏览器
+
+配置编辑与诊断：
+
+- `setup-mcp`：`mkstemp` 唯一临时文件 + 失败清理；写入 OSError 只让该 host 失败，
+  其余 host 继续；project scope 从 cwd 向上找项目根；没有可运行的 `elang` 命令时
+  报错而不是注册一个起不来的 server
+- `install-skill`：仓库检出时优先仓库里的载荷（开发改动立即生效）；复制后清理
+  PAYLOAD 之外的文件（不跟随符号链接/junction）；copy 覆盖 link 前先移除链接
+- `doctor`：套用私有浏览器缓存的解析顺序；无浏览器时带上 `choice["reason"]`；
+  安装版提示 `elang init-env`；去掉已不使用的 `dotenv` 探测；launch 探测改为
+  60 秒有界线程，超时给出明确错误
+- `config`：注册表值去引号；`.env` 解码失败在 `describe()` 里可见并带
+  `parse_problem`；相对 `ELANG_TMP_DIR` 统一 resolve 成绝对路径；
+  `init-env --force` 覆盖前先备份 `.env.bak-<时间戳>`
+- `setup.py`：子进程输出按 UTF-8 解码；doctor 单独 120 秒超时并打印尾部与退出码
+
+配套清理：
+
+- `.gitignore` 增加 `*.bak-*`（`.env` 的 force 备份、`setup-mcp` 的配置备份都可能
+  含凭据或本机路径）
+- 移除 `python-dotenv` 依赖：没有任何模块导入它，`.env` 由 `config.py` 自解析
+
+验证：
+
+- 13 个测试脚本全部通过：新增 `test_p1_safety` 16 项（浏览器兜底关闭、发布顺序、
+  迟到答案、验证码残留、信号原子写）、`test_p1_config` 19 项（GBK `.env` 报错、
+  相对 IPC 路径、force 备份、注册表去引号、doctor 脱敏）；`test_setup_mcp` 41、
+  `test_install_skill` 20、`test_answer_ipc` 28、`test_p0_safety` 19
+- `elang doctor --json` 实跑：`browser.ok=true`，无学号/密码，模块列表无 `dotenv`
+- 未改站点交互、选择器与提交时序；性能项（固定睡眠、整页重载、config 缓存、
+  每轮验证码整图传输）留到 P2
+
 

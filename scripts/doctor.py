@@ -20,8 +20,10 @@ Usage:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -31,7 +33,7 @@ import config  # noqa: E402
 def check_imports():
     import importlib.util as u
     mods = {}
-    for m in ("playwright", "dotenv", "mcp", "ddddocr"):
+    for m in ("playwright", "mcp", "ddddocr"):
         spec = u.find_spec(m)
         origin = (spec.origin or "") if spec else None
         mods[m] = {"found": bool(spec), "origin": origin}
@@ -53,8 +55,66 @@ def check_self_contained(mods):
     return borrowed
 
 
+LAUNCH_TIMEOUT_S = 60
+
+
+def _apply_private_browsers_path():
+    """Point Playwright at the tool's private cache, as `elang_reader` does.
+
+    `elang_reader.open_browser()` sets `PLAYWRIGHT_BROWSERS_PATH` before building
+    its choice, so without the same step here a bundled build that only exists in
+    `~/.elang/browsers` looks missing. An explicit override wins; "0" is treated
+    as unset, matching `config.browser_search_paths()`.
+    """
+    override = (os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "").strip()
+    if override in ("", "0") and config.BROWSERS_DIR.is_dir():
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(config.BROWSERS_DIR)
+
+
+def _launch_probe(choice, kwargs, out):
+    """Launch once, in THIS thread, with its own Playwright context.
+
+    Playwright's sync API is bound to the thread that created it, so the
+    background probe must not borrow the caller's `pw` object; it creates its own
+    context instead. `out` is a plain dict read by the caller after the join:
+    `executable`, `ok`, `error`.
+    """
+    if choice.get("mode") == "none":
+        # No driver needed to diagnose "nothing to launch", and the reason is the
+        # actionable part of the message.
+        reason = (choice.get("reason")
+                  or "no bundled chromium and no installed Chrome/Edge")
+        out["error"] = "no browser: " + reason
+        return
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        out["error"] = f"cannot import playwright: {type(e).__name__}: {e}"
+        return
+    try:
+        with sync_playwright() as pw:
+            if kwargs.get("executable_path"):
+                out["executable"] = kwargs["executable_path"]
+                if not Path(out["executable"]).exists():
+                    out["error"] = "browser executable not present at that path"
+                    return
+            elif kwargs.get("channel"):
+                out["executable"] = f"channel={kwargs['channel']}"
+            else:
+                out["executable"] = pw.chromium.executable_path
+                if not Path(out["executable"]).exists():
+                    out["error"] = "browser binary not present at that path"
+                    return
+            b = pw.chromium.launch(headless=True, **kwargs)
+            b.close()
+            out["ok"] = True
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+
+
 def check_browser():
     """Can Playwright launch the browser `elang run` would pick?"""
+    _apply_private_browsers_path()
     result = {"ok": False, "executable": None, "error": None,
               "browsers_path": os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or "(default)",
               "sources": None, "choice": None, "launch_kwargs": None}
@@ -65,36 +125,27 @@ def check_browser():
         result["launch_kwargs"] = config.browser_launch_kwargs(result["choice"])
     except Exception:
         pass
-    try:
-        from playwright.sync_api import sync_playwright
-    except Exception as e:
-        result["error"] = f"cannot import playwright: {type(e).__name__}: {e}"
+
+    # A launch against a blocked temp directory can hang indefinitely, and a
+    # diagnosis command must not do that. Run it on a worker thread with a
+    # wall-clock bound; the JSON shape is unchanged.
+    probe = {}
+    worker = threading.Thread(
+        target=_launch_probe,
+        args=(result.get("choice") or {}, result.get("launch_kwargs") or {}, probe),
+        name="doctor-launch-probe",
+        daemon=True,
+    )
+    worker.start()
+    worker.join(LAUNCH_TIMEOUT_S)
+    if worker.is_alive():
+        if probe.get("executable"):
+            result["executable"] = probe["executable"]
+        result["error"] = f"launch timed out after {LAUNCH_TIMEOUT_S}s"
         return result
-    try:
-        with sync_playwright() as pw:
-            choice = result.get("choice") or {}
-            kwargs = result.get("launch_kwargs") or {}
-            if choice.get("mode") == "none":
-                result["error"] = ("no browser: no bundled chromium and no "
-                                   "installed Chrome/Edge")
-                return result
-            if kwargs.get("executable_path"):
-                result["executable"] = kwargs["executable_path"]
-                if not Path(result["executable"]).exists():
-                    result["error"] = "browser executable not present at that path"
-                    return result
-            elif kwargs.get("channel"):
-                result["executable"] = f"channel={kwargs['channel']}"
-            else:
-                result["executable"] = pw.chromium.executable_path
-                if not Path(result["executable"]).exists():
-                    result["error"] = "browser binary not present at that path"
-                    return result
-            b = pw.chromium.launch(headless=True, **kwargs)
-            b.close()
-            result["ok"] = True
-    except Exception as e:
-        result["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+    result["executable"] = probe.get("executable")
+    result["error"] = probe.get("error")
+    result["ok"] = bool(probe.get("ok"))
     return result
 
 
@@ -188,7 +239,12 @@ def main():
                 '       $env:TEMP="D:\\tmp"; $env:TMP="D:\\tmp"'
             )
     if not creds["ok"]:
-        fixes.append(f'"{sys.executable}" scripts/init_env.py')
+        # `scripts/init_env.py` only exists in a repo checkout. An installed tool
+        # has the `elang` console script, so point at that subcommand instead.
+        if shutil.which("elang"):
+            fixes.append("elang init-env")
+        else:
+            fixes.append(f'"{sys.executable}" scripts/init_env.py')
 
     print("\n" + "=" * 64)
     if not fixes and not borrowed:

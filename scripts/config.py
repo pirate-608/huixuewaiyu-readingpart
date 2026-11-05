@@ -26,6 +26,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # The Windows console is GBK here; any Chinese in the output would crash or
@@ -45,17 +46,31 @@ USER_KEYS = ("ELANG_CAS_USERNAME", "CAS_USERNAME")
 PASS_KEYS = ("ELANG_CAS_PASSWORD", "CAS_PASSWORD")
 
 
-def parse_env_file(path):
+def parse_env_file(path, problems=None):
     """Minimal .env reader: KEY=VALUE, # comments, optional quotes.
 
     Deliberately not python-dotenv: this must work even when the dependency is
     unavailable, and the format used here is trivial. A UTF-8 BOM is tolerated
     because PowerShell's Out-File adds one.
+
+    `problems`, when given, collects one human-readable line per read failure.
+    Without it an unreadable file (GBK/ANSI bytes are the common case on a
+    Chinese Windows) is indistinguishable from a file with no credentials, and
+    the caller reports "credentials missing" instead of the real cause.
+
+    A missing file is NOT a problem: `resolve_env_file()` deliberately returns a
+    not-yet-created workspace path on a fresh checkout, and that is reported by
+    the caller itself (`env_file_exists`). Only an existing file that cannot be
+    read or decoded lands in `problems`.
     """
     out = {}
     try:
         text = Path(path).read_text(encoding="utf-8-sig")
-    except Exception:
+    except FileNotFoundError:
+        return out
+    except Exception as e:
+        if problems is not None:
+            problems.append(f"cannot read {path}: {type(e).__name__}: {e}")
         return out
     for line in text.splitlines():
         line = line.strip()
@@ -129,10 +144,14 @@ def ipc_dir():
     Lives here (not in elang_reader) so the answering commands can read and write
     those files WITHOUT importing the automation module, which pulls in Playwright.
     `ELANG_TMP_DIR` overrides; otherwise the platform temp convention is used.
+
+    A relative override is expanded and resolved ONCE, here, so every caller in
+    this process works with one absolute directory instead of a path that is
+    reinterpreted against whatever cwd happens to be current later.
     """
     override = (os.environ.get("ELANG_TMP_DIR") or "").strip()
     if override:
-        return Path(override)
+        return Path(override).expanduser().resolve()
     return Path("C:/tmp") if os.name == "nt" else Path("/tmp")
 
 
@@ -144,12 +163,15 @@ def load_credentials():
     """Resolve CAS credentials.
 
     Returns a dict:
-        username, password, env_file, source, username_from, password_from, ok
+        username, password, env_file, source, username_from, password_from, ok,
+        parse_problem
     `*_from` is "environment" or "file:KEY" so a caller can explain where a value
-    came from without re-deriving it.
+    came from without re-deriving it. `parse_problem` is None when the file was
+    read (or did not exist), or the reason the file could not be decoded.
     """
     path, source = resolve_env_file()
-    file_vars = parse_env_file(path)
+    problems = []
+    file_vars = parse_env_file(path, problems)
 
     user, u_key = _pick(os.environ, USER_KEYS)
     u_from = "environment" if u_key else None
@@ -172,15 +194,25 @@ def load_credentials():
         "username_from": u_from,
         "password_from": p_from,
         "ok": bool(user and pwd),
+        "parse_problem": problems[0] if problems else None,
     }
 
 
 def write_env_template(path=None, force=False):
-    """Create a .env template. Returns (path, created)."""
+    """Create a .env template. Returns (path, created).
+
+    `force=True` replaces an existing file, which may already hold the user's real
+    credentials, so keep a timestamped copy next to it first. An unreadable or
+    undeletable backup is better surfaced as an error than silently losing the
+    only copy of the password.
+    """
     target = Path(path).expanduser() if path else resolve_env_file()[0]
     if target.exists() and not force:
         return target, False
     target.parent.mkdir(parents=True, exist_ok=True)
+    if force and target.is_file():
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        shutil.copy2(target, target.with_name(f"{target.name}.bak-{stamp}"))
     target.write_text(
         "# 慧学外语 CAS 凭据\n"
         "# 这个文件属于工作区，请勿提交到版本库。\n"
@@ -372,6 +404,21 @@ def _browser_candidates():
     return out
 
 
+def _strip_quotes(value):
+    """Drop a matching pair of surrounding quotes from a registry value.
+
+    App Paths values are usually stored as `"C:\\Program Files\\...\\chrome.exe"`.
+    `Path('"C:\\...exe"').is_file()` is then False, which used to hide an
+    installed browser from detection.
+    """
+    if not isinstance(value, str):
+        return value
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+        return v[1:-1]
+    return v
+
+
 def _windows_app_paths():
     """Executables advertised by the registry's App Paths keys."""
     try:
@@ -386,7 +433,7 @@ def _windows_app_paths():
                 continue
             try:
                 with winreg.OpenKey(hive, base + "\\" + exe) as k:
-                    value = winreg.QueryValueEx(k, None)[0]
+                    value = _strip_quotes(winreg.QueryValueEx(k, None)[0])
                 if value and Path(value).is_file():
                     found[channel] = value
             except Exception:
@@ -548,6 +595,8 @@ def describe():
     """One-line-ish description for doctor output."""
     info = load_credentials()
     lines = [f"env file   : {info['env_file']}  ({info['source']})"]
+    if info.get("parse_problem"):
+        lines.append(f"             -> 读取失败: {info['parse_problem']}")
     if not info["env_file_exists"]:
         lines.append("             -> 文件不存在，可用 `init-env` 生成模板")
     else:

@@ -1,5 +1,7 @@
 # 凭据
 .env
+# init-env --force、setup-mcp、以及各 agent 配置的备份都可能含凭据或本机路径
+*.bak-*
 
 # 本机专属的 MCP 注册（含绝对路径）。
 # `.mcp.json.example` 是模板、会入库；实际文件由

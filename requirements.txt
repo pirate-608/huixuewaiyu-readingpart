@@ -4,7 +4,8 @@
 # `mcp` 1.x and 2.x are both supported (the high-level server class was renamed
 # FastMCP -> MCPServer in 2.x; scripts/elang_mcp.py shims both).
 mcp>=1.2
-python-dotenv>=1.0.0
+# NOTE: python-dotenv is NOT needed. `scripts/config.py` parses `.env` itself, so
+# every entry point shares one resolution rule and the tool has one less wheel.
 
 # Pinned to the 1.60 series on purpose. Each Playwright release expects its own
 # browser build (1.60 -> chromium-1223), so an unpinned bump can demand a fresh

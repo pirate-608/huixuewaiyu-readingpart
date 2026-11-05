@@ -112,12 +112,23 @@ def _package_dirs():
 def resolve_source(key):
     """Return a filesystem path for `key`, or None.
 
-    Installed layout wins when present, because `elang install-skill` must work
-    with no repo checkout. `Path(__file__).parent.parent` is NOT a valid repo root
-    inside site-packages (it resolves to `Lib/`), which silently made every file
-    look absent.
+    A repo checkout wins when it is actually a checkout (`<repo>/SKILL.md`
+    exists), so development edits and `--link` agree on which files are the
+    payload. Otherwise fall back to the installed package's `share`/`data`
+    payload, because `elang install-skill` must work with no repo checkout. Note
+    that `Path(__file__).parent.parent` is NOT a valid repo root inside
+    site-packages (it resolves to `Lib/`), which silently made every file look
+    absent.
     """
-    # 1. installed package data
+    repo_cand = REPO / key
+    # 1. repo layout: a real checkout always wins over packaged data, so a
+    #    developer's edits are what gets installed.
+    if (REPO / "SKILL.md").is_file():
+        try:
+            return repo_cand if repo_cand.exists() else None
+        except Exception:
+            return None
+    # 2. installed package data
     for base in _package_dirs():
         name = Path(key).name
         for cand in (base / key, base / name):
@@ -126,10 +137,6 @@ def resolve_source(key):
                     return Path(str(cand))
             except Exception:
                 continue
-    # 2. repo layout
-    cand = REPO / key
-    if cand.exists():
-        return cand
     return None
 
 
@@ -261,14 +268,75 @@ def remove_path(p: Path):
         raise
 
 
+def _kept_by_payload(rel: Path) -> bool:
+    """True when `rel` is a payload entry or lives inside one."""
+    for _key, keep in PAYLOAD:
+        keep_path = Path(keep)
+        if rel == keep_path or keep_path in rel.parents:
+            return True
+    return False
+
+
+def prune_stale(dest: Path) -> list:
+    """Delete files under `dest` that the payload no longer ships.
+
+    Conservative on purpose: only regular files are unlinked, and only empty
+    directories are removed, so any directory holding a kept file survives.
+    Symlinks and junctions are neither followed nor deleted, because walking
+    through a link could delete files outside the destination.
+    """
+    removed = []
+    dirs = []
+    stack = [dest]
+    while stack:
+        cur = stack.pop()
+        try:
+            entries = list(os.scandir(cur))
+        except OSError:
+            continue
+        for entry in entries:
+            p = Path(entry.path)
+            try:
+                if _is_junction(p) or p.is_symlink():
+                    continue
+                if entry.is_dir(follow_symlinks=False):
+                    dirs.append(p)
+                    stack.append(p)
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+            except OSError:
+                continue
+            rel = p.relative_to(dest)
+            if _kept_by_payload(rel):
+                continue
+            try:
+                p.unlink()
+                removed.append(rel.as_posix())
+            except OSError as e:
+                print(f"    could not remove stale {rel.as_posix()}: "
+                      f"{type(e).__name__}: {e}")
+    # Deepest first, so a directory that only held stale files goes away too.
+    for d in sorted(dirs, key=lambda x: len(x.parts), reverse=True):
+        try:
+            d.rmdir()
+        except OSError:
+            pass            # still holds kept files (or is in use): leave it
+    return removed
+
+
 def install_copy(dest: Path):
-    """Copy the payload, creating intermediate directories.
+    """Copy the payload, creating intermediate directories, then prune.
 
     PAYLOAD contains nested destinations (`references/answers.json`), so each
     file's PARENT must exist first — `shutil.copy2` creates the file, not its
     directory. Missing that made the first nested entry raise FileNotFoundError
     and abort the rest, silently leaving only the first item in place.
     """
+    # A previous `--link` (a junction on Windows) must be removed first: copying
+    # through the link would write into the repo checkout instead of replacing it.
+    if dest.is_symlink() or _is_junction(dest):
+        remove_path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     missing = []
     for key, rel in PAYLOAD:
@@ -288,6 +356,9 @@ def install_copy(dest: Path):
         except Exception as e:
             print(f"    could not copy {rel}: {type(e).__name__}: {e}")
             missing.append(rel)
+    removed = prune_stale(dest)
+    if removed:
+        print(f"    pruned {len(removed)} stale file(s) no longer in the payload")
     return missing
 
 

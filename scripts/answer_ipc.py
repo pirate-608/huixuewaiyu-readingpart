@@ -29,6 +29,7 @@ Commands
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -57,9 +58,32 @@ def _load():
 
 
 def _send(payload):
+    """Publish the signal atomically.
+
+    The solver polls this file every second. A direct write can expose a
+    half-written (or even multi-byte-truncated) file, which the reader would
+    either parse as broken or decode as invalid UTF-8. Write a sibling temp file
+    and replace it, so the reader sees the old file or the complete new one.
+    """
     SIGNAL.parent.mkdir(parents=True, exist_ok=True)
-    SIGNAL.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    print(f"sent -> {SIGNAL}: {json.dumps(payload, ensure_ascii=False)[:200]}")
+    text = json.dumps(payload, ensure_ascii=False)
+    tmp = SIGNAL.with_name(SIGNAL.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        os.replace(tmp, SIGNAL)
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+    print(f"sent -> {SIGNAL}: {text[:200]}")
 
 
 # ---------------------------------------------------------------- display

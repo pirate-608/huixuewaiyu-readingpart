@@ -39,12 +39,21 @@ except Exception:
 
 
 def run(cmd, timeout=1800):
+    """Run a child and return (ok, combined_output, returncode).
+
+    The child's stdout is reconfigured to UTF-8 by the scripts this drives, so it
+    must be decoded as UTF-8. `text=True` would use the locale codec (GBK here),
+    which mojibakes the Chinese output and can raise UnicodeDecodeError.
+    """
     print(f"  $ {' '.join(str(c) for c in cmd)}")
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return r.returncode == 0, ((r.stdout or "") + (r.stderr or "")).strip()
+        r = subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                           errors="replace", timeout=timeout)
+        return (r.returncode == 0,
+                ((r.stdout or "") + (r.stderr or "")).strip(),
+                r.returncode)
     except Exception as e:
-        return False, f"{type(e).__name__}: {e}"
+        return False, f"{type(e).__name__}: {e}", -1
 
 
 def elang_cmd():
@@ -84,7 +93,7 @@ def install_tool(check_only):
         _uv_hint()
         return False
 
-    ok, out = run(["uv", "tool", "install", "--force", str(REPO)])
+    ok, out, _rc = run(["uv", "tool", "install", "--force", str(REPO)])
     for line in out.splitlines()[-8:]:
         print("  " + line)
     if not ok:
@@ -101,7 +110,7 @@ def register_skill(check_only):
         return False
     py = sys.executable
     args = [py, str(script), "--copy"] + (["--check"] if check_only else [])
-    ok, out = run(args)
+    ok, out, _rc = run(args)
     for line in out.splitlines():
         print("  " + line)
     return ok
@@ -115,9 +124,16 @@ def report():
         print("  Run `python scripts/setup.py` to install it, or use the repo "
               "checkout directly via scripts/doctor.py.")
         return False
-    ok, out = run([elang, "doctor"])
-    for line in out.splitlines():
+    ok, out, rc = run([elang, "doctor"], timeout=120)
+    lines = out.splitlines()
+    # A doctor run is a quick diagnosis, not an install: 120 s is generous. If it
+    # does fail, the tail plus the exit code is what identifies the cause.
+    if not ok:
+        lines = lines[-20:]
+    for line in lines:
         print("  " + line)
+    if not ok:
+        print(f"  doctor failed (exit code {rc})")
     return ok
 
 

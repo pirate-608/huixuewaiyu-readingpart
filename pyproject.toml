@@ -26,7 +26,8 @@ classifiers = [
 # may not be able to make. Move this bound together with the browser.
 dependencies = [
   "playwright>=1.49,<1.61",
-  "python-dotenv>=1.0.0",
+  # python-dotenv is deliberately absent: config.py parses .env itself, so every
+  # entry point shares one resolution rule and the tool needs one less wheel.
   "mcp>=1.2",
   # `elang setup-mcp` parses agent configs, edits structurally, then re-parses to
   # verify and rolls back on failure. An appender cannot verify.

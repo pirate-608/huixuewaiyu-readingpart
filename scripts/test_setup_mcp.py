@@ -100,6 +100,20 @@ check("claude: left the bad file untouched",
       (PROJECT / ".mcp.json").read_text(encoding="utf-8") == "{not json")
 (PROJECT / ".mcp.json").write_text(json.dumps({"mcpServers": {}}), encoding="utf-8")
 
+# ------------------------------------------------- project-root discovery
+print("\n=== claude: project root discovery ===")
+nested_root = SANDBOX / "nested-project"
+(nested_root / ".git").mkdir(parents=True)
+nested_cwd = nested_root / "sub" / "inner"
+nested_cwd.mkdir(parents=True)
+nested_target = nested_root / ".mcp.json"
+
+rc, out = run(["--host", "claude", "--dry-run"], cwd=nested_cwd)
+check("claude: walks up to the project root", rc == 0, f"rc={rc}\n{out[-300:]}")
+check("claude: target is <project>/.mcp.json", str(nested_target) in out,
+      f"expected {nested_target}")
+check("claude: dry-run there wrote nothing", not nested_target.exists())
+
 # ---------------------------------------------------------------- DSH
 print("\n=== dsh (YAML) ===")
 patch = FAKE_HOME / ".dsh" / "profiles" / "desktop" / "cordis.patch.yml"
