@@ -13,6 +13,10 @@ Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.
 按里面的步骤帮我装好这个工具。我是 <DSH / Codex / Claude Code> 用户。
 ```
 
+GitHub 打不开时，把上面链接换成 Gitee 镜像
+`https://gitee.com/pirate-608/huixuewaiyu-readingpart`（内容相同，安装命令用
+Gitee 地址）。
+
 agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板（密码由用户填写）、
 注册 skill、注册 MCP。每一步都有验证命令，失败时报告原始错误，不会跳过。
 
@@ -54,6 +58,12 @@ agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板�
 
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
+```
+
+国内网络访问 GitHub 不稳定时，改用 Gitee 镜像（只读副本，内容相同）：
+
+```bash
+uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
 ### 2. 安装浏览器
@@ -357,6 +367,16 @@ zjuam.zju.edu.cn
 
 反过来说，关闭代理后 `git clone`、`uv tool install`、需要下载的
 `elang install-browser` 会失败。这类失败源于网络，不要反复重试；先确认代理状态再继续。
+
+### 安装时连不上 GitHub
+
+改用 Gitee 镜像安装，代码与 GitHub 相同，只读副本，随每次提交同步：
+
+```bash
+uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
+```
+
+镜像同步可能滞后几分钟。问题与 PR 仍到 GitHub 提交。
 
 ### 如何判断是网络问题还是工具问题
 

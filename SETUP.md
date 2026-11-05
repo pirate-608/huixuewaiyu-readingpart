@@ -51,6 +51,12 @@
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
+GitHub 访问不稳定时，把地址换成 Gitee 镜像，内容相同：
+
+```bash
+uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
+```
+
 **验证**：
 
 ```bash
