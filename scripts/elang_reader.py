@@ -493,7 +493,7 @@ def _answer_key_from_job(job):
     confidently decodable: a wrong key is worse than no key.
     """
     tid = job.get("type_id")
-    if tid not in (1,) + _FILL_TYPE_IDS:
+    if tid not in (1, 2) + _FILL_TYPE_IDS:
         # type 4 is multi-select and set_answers() has no path for it, and
         # types 3/6 are free text: neither is handled here.
         return None
@@ -504,6 +504,24 @@ def _answer_key_from_job(job):
     if tid == 1:
         if text and len(text) == 1 and text.isalpha():
             return {"kind": "choice", "labels": [text.upper()]}
+        return None
+
+    if tid == 2:
+        # Type 2 (typed fill) does NOT ship `options_answer`. Its expected text
+        # lives in `optionsArray[n].title`, one entry per blank: the app itself
+        # grades with `isFillRight(input, optionsArray[n].title)`, which is a
+        # plain normalised comparison. `&` separates acceptable alternatives
+        # ("transportation&transport"), so submit the FIRST one.
+        opts = job.get("optionsArray") or []
+        vals = []
+        for o in opts:
+            v = str((o or {}).get("title") or "").strip()
+            if not v:
+                vals = []
+                break
+            vals.append(v.split("&")[0].strip())
+        if vals:
+            return {"kind": "fill", "values": vals}
         return None
 
     # ---- fill: prefer options_answer, fall back to optionsArray1 ----
@@ -1329,13 +1347,17 @@ async def extract_page_content(page, timeout_s=60, quick=False):
 
         await page.wait_for_timeout(CONTENT_POLL_MS)
 
-    # No questions arrived. Decide whether a captcha is holding them back, using
-    # the image length measured by the loop above — NOT a second, separately
-    # computed probe. Having two sources of truth for the same fact is exactly
-    # what made the gate report "no captcha" while the loop right above it
-    # printed captchaImg=yes.
-    blocked = bool(last_log and last_log[2])   # (jobs, blocks, hasImage)
+    # No questions arrived. Decide whether a captcha is holding them back.
+    #
+    # Use BOTH observations: the loop's last sample AND a fresh read made now.
+    # Measured failure this prevents: with `quick=True` the single sample can land
+    # before the captcha image is fetched, so `last_log` says "no image" while the
+    # page is already gated (img=8178B, gated=True right after). Trusting only the
+    # loop made the caller believe there was no gate and burn a full extract
+    # timeout before noticing it.
     state = await _captcha_state(page, want_image=False)
+    blocked = bool((last_log and last_log[2])
+                   or (state and state.get("gated")))
     detail = ""
     if state:
         detail = (f" [jobs={state.get('jobs')} dom={state.get('domQuestions')} "

@@ -4451,4 +4451,75 @@ submit 按钮文本 = jobList.length ? "提交" : "完成阅读"
 
 新增 `scripts/test_read_only_article.py` 14 项；全套 15 个测试脚本通过。
 
+---
+
+## 64. 验证码实测通过，并修掉两处相关缺陷
+
+以用户观察到的真实闸门（`职业与发展` / `BBC Experience`）为目标，装了 ddddocr
+后把整条链路跑通。
+
+### 依赖可用性（此前没验证过）
+
+`uv pip install ddddocr Pillow` 在 **Python 3.13.12** 上成功，8 个包 1.5 秒装完：
+
+```
+ddddocr 1.6.1 | onnxruntime 1.31.1 | opencv-python 5.0.0.93
+numpy 2.5.4   | Pillow 13.0.0      | protobuf 7.36.2 | flatbuffers | packaging
+```
+
+即"可选 OCR 依赖在 3.13 上装得上"，推断出的兼容性风险排除。
+
+### 实测结果：整条链路通
+
+```
+quick: qs=0 blocked=True                    ← 闸门被正确识别
+!! CAPTCHA detected — solving
+OCR attempt 1/3: '9153'
+captcha submit '9153': jobs 0->3, imageChanged=False
+[OK] CAPTCHA solved by OCR                  ← 首次即解出
+questions: 3
+answer_key: ALL COVERED                     ← 答案键全覆盖
+answers recorded: {'choice': 0, 'fill': 3}
+submit: answered 3/3, confirmVisible=True, readHint=''
+dry_run: 'dry-run'                          ← 走完但未提交
+```
+
+四次独立运行分别解出 `4174`、`0993`、`0126`、`9153`，**全部一次命中**。
+目前样本小，只能说"这几张图 ddddocr 都读对了"，不足以给出识别率结论。
+
+### 缺陷一：`quick` 读取把闸门判成"没有闸门"
+
+第一次跑时页面明明 `gated=True`（图 8178B），`extract_page_content(quick=True)`
+却返回 `blocked=False`。原因：`blocked` 只取轮询**最后一帧**的观测，而 quick 只采样
+一次，那一次图还没下载完（`captchaImg=no`）。
+
+后果：调用方以为没闸门 → 走完整抓取 → 白等一个完整超时才发现有验证码。
+
+修正：`blocked` 现在同时考虑"轮询末帧有图"**或**"当前实时状态 `gated`"。
+两者读的是同一个钉住的实例，所以不会重现旧的"两个来源互相矛盾"问题
+（那次是读了不同实例）。修完首测即 `blocked=True`，不再有多余等待。
+
+### 缺陷二：`type_id 2`（文本填空）没有答案键
+
+`BBC Experience` 第三题是 `type_id 2`，`options_answer` **根本不存在**，
+导致整篇降级为"答案键未覆盖"。
+
+读 bundle 确认：`confirmSubmit` 用 `isFillRight(输入, optionsArray[n].title)`
+判分，而 `isFillRight` 是纯比较（归一化后 `includes`），所以
+**`optionsArray[n].title` 就是逐空的标准答案**；`&` 分隔多个可接受写法
+（`transportation&transport`），提交第一个即可。
+
+修正：`_answer_key_from_job()` 为 `type_id 2` 增加专用分支，按空顺序取
+`optionsArray[n].title`，`&` 取首项。补上后该文章 `ALL COVERED`，
+应用 3/3（q0/q1 各 6 空、q2 4 空）。
+
+### 仍需注意
+
+- `type_id 4`（多选）与 `3/6`（自由文本）依旧不解析答案键，仍走题库/AI；
+  多选还缺 `set_answers` 的提交路径。
+- 验证码拦截频率（"十来篇一次"）仍未量化，只是现在有可靠样本可以随时复现。
+
+新增答案键用例 4 项（`type_id 2` 及其缺失/空值情形），`test_answer_key` 现 27 项；
+全套 15 个测试脚本通过。
+
 

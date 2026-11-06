@@ -113,6 +113,34 @@ key = er._answer_key_from_job(broken)
 check("unparseable JSON falls back to optionsArray1",
       key and len(key.get("values") or []) == 7, str(key))
 
+print("\n=== typed fill (type_id 2) keys from optionsArray ===")
+# Type 2 ships no options_answer; the expected text is optionsArray[n].title,
+# which is exactly what the app grades against (isFillRight(input, title)).
+typed = {
+    "id": 9453,
+    "type_id": 2,
+    "title": "<p>fill in</p>",
+    "titleChunks": [{"isInput": True} for _ in range(4)],
+    "optionsArray": [
+        {"title": "carton"}, {"title": "craze"},
+        {"title": "clientele"}, {"title": "transportation&transport"},
+    ],
+}
+key = er._answer_key_from_job(typed)
+check("type 2 reads optionsArray",
+      key == {"kind": "fill", "values": ["carton", "craze", "clientele",
+                                        "transportation"]}, str(key))
+check("'&' alternatives collapse to the first",
+      key and key["values"][3] == "transportation")
+
+typed_no_opts = dict(typed, optionsArray=[])
+check("type 2 without optionsArray yields no key",
+      er._answer_key_from_job(typed_no_opts) is None)
+
+typed_blank = dict(typed, optionsArray=[{"title": "a"}, {"title": ""}])
+check("type 2 with an empty expected value yields no key",
+      er._answer_key_from_job(typed_blank) is None)
+
 print("\n=== unsupported shapes are refused, not guessed ===")
 multi = dict(tf_job(9400, "A,B"), type_id=4)
 check("multi-select (type 4) is refused", er._answer_key_from_job(multi) is None)
