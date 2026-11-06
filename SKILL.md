@@ -188,12 +188,19 @@ elang run batch-all --limit 1 --dry-run    # 安全试跑
 
 验证码是题目页的前置条件，题目只有在通过验证码后才会加载。处理顺序如下：
 
-1. **ddddocr 自动识别**（最多 3 次；若图片没换就停止重试，避免死循环）
-2. **交接**：图片写到 `<ipc>/elang_captcha_image.png`，
+1. **手动模式优先**（`ELANG_CAPTCHA_MANUAL=1`）：完全不碰页面，等用户自己输
+2. **ddddocr 自动识别**（最多 3 次；若图片没换就停止重试，避免死循环）
+3. **交接**：图片写到 `<ipc>/elang_captcha_image.png`，
    请求写到 `<ipc>/elang_captcha_request.json`
    → 你读图片，把 `{"captcha_code":"XXXX"}` 写到 `<ipc>/elang_captcha.json`
-3. **人工**：设 `ELANG_CAPTCHA_MANUAL=1`，脚本完全不碰 `verifyCode`，
-   等用户在页面上自己输入
+
+**ddddocr 默认没装**（可选依赖，带 onnxruntime + opencv 体积较大）。
+`elang doctor` 显示 `ddddocr MISSING` 是正常的，不是环境坏了。装了才有第 2 步，
+没装就跳过它直接进第 3 步。
+
+**先确认你自己能不能读图**：第 3 步的"读图片"必须由**能看图的** agent 完成。
+读不了图时不要干等——那会白等 600 秒（`CAPTCHA_VISION_TIMEOUT`），
+应当改用 `ELANG_CAPTCHA_MANUAL=1` 交给用户。
 
 **为什么人工模式要"完全不碰"**：输错会让应用刷新图片，
 从而**清掉用户已输入的内容**。
@@ -201,6 +208,11 @@ elang run batch-all --limit 1 --dry-run    # 安全试跑
 MCP 模式下用 `elang_get_captcha` / `elang_solve_captcha`，逻辑相同。
 
 OCR 结果不确定时不要反复尝试，应交接给用户。连续出错会触发更多验证码。
+
+> 实测（2026-11）：交接与提交这段是通的——图片与请求文件都会写出，
+> 答案文件被读到后会调用应用自己的校验接口；**错的码会被服务端拒绝并换一张新图**，
+> 引擎据此重新发起请求而不是拿同一张图死循环。未验证的是"对的码能否清闸"，
+> 因为那次实验环境里既没有 ddddocr 也没有能看图的模型。
 
 ---
 

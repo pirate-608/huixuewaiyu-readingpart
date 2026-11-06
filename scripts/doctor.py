@@ -233,6 +233,14 @@ def main():
     for name, info in mods.items():
         state = "ok" if info["found"] else "MISSING"
         print(f"  {name:<12} {state}")
+    if not (mods.get("ddddocr") or {}).get("found"):
+        # Optional on purpose: it drags in onnxruntime + opencv. Say so, otherwise
+        # "MISSING" reads as a broken install.
+        print("\n  note: ddddocr is OPTIONAL (captcha OCR only). Without it a")
+        print("        captcha is handed to a vision model or solved by hand.")
+        print("        To enable OCR:")
+        print("          uv tool install --with ddddocr --with Pillow "
+              "git+<repo-url>")
     if borrowed:
         print("\n  WARNING: these come from OUTSIDE this interpreter's tree, so they")
         print("           will not travel to another machine:")

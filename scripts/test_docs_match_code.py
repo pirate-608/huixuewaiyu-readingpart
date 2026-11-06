@@ -25,6 +25,7 @@ EXTERNAL_FLAGS = {
     "no-verify",              # git commit
     "all", "hard",            # git filter-repo
     "force-with-lease",       # git push
+    "with",                   # uv tool install --with (optional extras, e.g. ddddocr)
     "shared",                 # elang install-browser (present but checked below)
 }
 
