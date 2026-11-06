@@ -265,6 +265,30 @@ class ElangSession:
                 self.error = None
                 return self.envelope(captcha_pending=True)
             if not content.get("questions"):
+                if content.get("no_exercises"):
+                    # Read-only article: the site completes it by submitting an
+                    # empty answer set (its own buildSubmitData posts a placeholder
+                    # when jobList is empty). Expose it as a normal
+                    # awaiting_answers step so the caller can submit_answers([]),
+                    # instead of silently skipping it forever.
+                    self.content = content
+                    self.state = State.AWAITING_ANSWERS
+                    self.error = None
+                    return self.envelope(
+                        article={
+                            "index": art.get("index"),
+                            "resources_id": rid,
+                            "log_id": log_id,
+                            "title": content.get("title") or art.get("name"),
+                            "passage": content.get("passage"),
+                            "questions": [],
+                        },
+                        no_exercises=True,
+                        answer_source="none",
+                        hint=("This article has NO exercises. Call "
+                              "elang_submit_answers([]) to mark it as read; "
+                              "answering is not needed."),
+                    )
                 print(f"[session] no questions for {art.get('name')!r}; skipping")
                 continue
 

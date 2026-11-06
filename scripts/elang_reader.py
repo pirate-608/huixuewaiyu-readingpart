@@ -542,6 +542,11 @@ def _answers_from_keys(questions):
     """
     out = []
     missing = []
+    if not questions:
+        # Vacuous truth would be wrong here: an article with no questions is a
+        # read-only article, and its completion path is "submit an empty set",
+        # not "the answer key covered everything".
+        return None, "the article has no questions"
     for q in questions:
         key = q.get("answer_key")
         if not key:
@@ -642,6 +647,11 @@ TOKEN_REFRESH_MARGIN = 300
 # Content polling interval. The page usually has the data within ~1 s; 750 ms
 # halves the worst-case wait compared with the old 1.5 s without hammering.
 CONTENT_POLL_MS = 750
+# How many CONSECUTIVE polls must show the "no exercises" empty state before an
+# article is treated as read-only. Measured: the empty state also flashes briefly
+# while the questions are still being fetched, so a single reading is not proof —
+# with one reading, a normal 6-question article was misclassified as read-only.
+READ_ONLY_CONFIRM_POLLS = 4
 
 
 # ---- Durable state helpers ----
@@ -1166,6 +1176,33 @@ def _html_to_text(html):
     return text.strip()
 
 
+def _page_has_no_exercises(data):
+    """True when a praxis page currently shows the "no exercises" empty state.
+
+    The site renders a dedicated empty state for articles that ship no questions
+    and relabels its submit button "完成阅读"; submitting then posts a placeholder
+    record ({job_id: 0, type_id: 999, is_right: 1}). Those articles are meant to
+    be COMPLETED, not skipped.
+
+    All three conditions matter:
+
+    * `noExercises` — the empty state is actually on screen
+    * not `loading`  — otherwise the questions may simply not have arrived yet
+    * no captcha image — a pending captcha also renders an empty jobList, and
+      that page must go through the captcha path instead
+
+    IMPORTANT: a single True does NOT prove the article is read-only. The empty
+    state also flashes during the window between "page mounted" and "questions
+    fetched", so callers must confirm it across several consecutive polls
+    (see READ_ONLY_CONFIRM_POLLS) before acting on it.
+    """
+    if not data:
+        return False
+    return bool(data.get("noExercises")
+                and not data.get("loading")
+                and not data.get("imageLen"))
+
+
 async def extract_page_content(page, timeout_s=60, quick=False):
     """Passage + questions for the CURRENT praxis page.
 
@@ -1193,6 +1230,7 @@ async def extract_page_content(page, timeout_s=60, quick=False):
     last_log = None
     # Poll often enough to feel instant, but keep the total bounded by timeout_s.
     rounds = 1 if quick else max(1, int(timeout_s * 1000 / CONTENT_POLL_MS))
+    no_ex_polls = 0
 
     # Pin the praxis instance on the page once, then read it everywhere. Also
     # remember the handle in Python so the captcha code reads the same object.
@@ -1226,6 +1264,12 @@ async def extract_page_content(page, timeout_s=60, quick=False):
             }));
 
             const res = (d.resources && d.resources.resources) || {};
+            // Some articles ship NO exercises: the page then renders a dedicated
+            // empty state ("暂无练习题，请先阅读文章。") and the submit button is
+            // relabelled "完成阅读". That is a legitimate completion path, not an
+            // error, and it must be detected so the caller stops polling.
+            const emptyState = [...document.querySelectorAll('.empty-state')]
+                .some(el => (el.innerText || '').includes('暂无练习题'));
             return {
                 jobs: JSON.parse(JSON.stringify(d.jobList || [])),
                 blocks: blocks,
@@ -1234,6 +1278,8 @@ async def extract_page_content(page, timeout_s=60, quick=False):
                 resourcesId: d.resourcesId || '',
                 resourceName: res.name || '',
                 content: res.content || '',
+                loading: !!d.loading,
+                noExercises: emptyState,
             };
         }""")
 
@@ -1256,9 +1302,30 @@ async def extract_page_content(page, timeout_s=60, quick=False):
                 "passage": _html_to_text(data.get("content") or ""),
                 "title": data.get("resourceName") or "",
                 "blocked": False,
+                "no_exercises": False,
                 "log_id": data.get("logId") or "",
                 "resources_id": data.get("resourcesId") or "",
             }
+
+        # A page that KEEPS reporting "no exercises" is read-only — return at once
+        # instead of polling out the timeout. The empty state also flashes while
+        # the questions are in flight, so require several consecutive readings;
+        # `quick=True` never decides this, because it takes a single sample.
+        if not quick and _page_has_no_exercises(data):
+            no_ex_polls += 1
+            if no_ex_polls >= READ_ONLY_CONFIRM_POLLS:
+                print("  [elang] this article has NO exercises (read-only)")
+                return {
+                    "questions": [],
+                    "passage": _html_to_text(data.get("content") or ""),
+                    "title": data.get("resourceName") or "",
+                    "blocked": False,
+                    "no_exercises": True,
+                    "log_id": data.get("logId") or "",
+                    "resources_id": data.get("resourcesId") or "",
+                }
+        else:
+            no_ex_polls = 0
 
         await page.wait_for_timeout(CONTENT_POLL_MS)
 
@@ -1280,6 +1347,12 @@ async def extract_page_content(page, timeout_s=60, quick=False):
         print(f"  [elang] no questions and no captcha image (empty jobList){detail}")
     out = dict(empty)
     out["blocked"] = blocked
+    # Timed out without questions and without a captcha: this may still be a
+    # read-only article whose empty state we saw long enough. Callers treat
+    # `no_exercises` as "complete it, do not answer it"; leaving it False keeps
+    # the cautious "skip" behaviour for genuinely stuck pages.
+    out["no_exercises"] = bool(no_ex_polls >= READ_ONLY_CONFIRM_POLLS
+                               and not blocked)
     if state:
         out["log_id"] = str(state.get("logId") or "")
     return out
@@ -2288,6 +2361,31 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
                     content = await extract_page_content(page)
 
         if not content.get("questions"):
+            if content.get("no_exercises"):
+                # Read-only article. The site completes these by clicking the
+                # button it relabels "完成阅读", which posts a placeholder record
+                # {job_id: 0, type_id: 999, is_right: 1}. Skipping instead left
+                # the article forever unfinished (and the subject never complete).
+                print("  [READ-ONLY] no exercises — marking it read")
+                try:
+                    submit_result = await submit(page, dry_run=dry_run)
+                except Exception as e:
+                    submit_result = f"threw: {type(e).__name__}: {e}"
+                ok = ((submit_result == "dry-run") if dry_run
+                      else (submit_result == "OK"))
+                if not ok:
+                    print(f"  [FAIL] marking it read failed: {submit_result}")
+                    results.append({"name": name, "status": "submit_failed",
+                                    "detail": str(submit_result)})
+                else:
+                    results.append({"name": name,
+                                    "status": "dry_run" if dry_run
+                                    else "completed_no_exercises"})
+                    print(f"  [OK] {'dry-run (not posted)' if dry_run
+                          else 'marked as read'}")
+                if not await back_or_abort():
+                    break
+                continue
             print(f"  SKIP: no questions (blocked={content.get('blocked')})")
             results.append({"name": name, "status": "no_questions"})
             if not await back_or_abort():
@@ -3009,6 +3107,16 @@ async def mode_solve(url, dry_run=False):
             if await wait_for_captcha(page):
                 content = await extract_page_content(page)
         if not content.get("questions"):
+            if content.get("no_exercises"):
+                print("[elang] this article has no exercises — marking it read "
+                      "(the site does this via its 完成阅读 button)")
+                res = await submit(page, dry_run=dry_run)
+                ok = (res == "dry-run") if dry_run else (res == "OK")
+                print(f"[elang] {'dry-run (not posted)' if ok and dry_run else res}")
+                if not ok:
+                    print("[elang] marking it read did NOT complete")
+                await context.close()
+                return
             print("[elang] no questions available (unresolved captcha or empty "
                   "page); aborting instead of waiting for an answer.")
             await context.close()
