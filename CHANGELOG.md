@@ -4235,4 +4235,52 @@ P3 清理（全部是死代码，删除前逐一 grep 确认无引用）：
 不是替代，是叠加：答案键最快最准但依赖"站点继续下发它"；题库离线、可审计、
 可分享，站点改版后仍是退路。两者都不命中才落到 agent/AI 作答。
 
+---
+
+## 60. `inferences/api_inference.md`：站点接口与内部结构地图
+
+给执行 agent 排错用的文档，随 skill 分发（`elang install-skill` 会把它放进
+`inferences/` 子目录）。内容全部来自**实测抓包**与**前端 bundle 静态读取**，
+未验证的地方在文末单独标注，不猜。
+
+### 为什么必须先抓包
+
+先前的结论都来自"读 Vue 组件源码"，接口层一直是空白。这次直接抓了一次真实
+会话（登录 → 主题列表 → 文章列表 → 开文章 → 加载题目），拿到 20 个真实请求，
+再从 `app.*.js` 里找出前端封装函数与路径的对应关系：
+
+| 函数 | 方法 | 路径 | 作用 |
+|---|---|---|---|
+| `sa` | POST | `/en/jobAnswer/save` | 提交答案 |
+| `ia` | POST | `/en/resources/updateUserStudy` | 标记已学完 |
+| `ta` | POST | `/en/resources/saveUserStudyResource` | `toPraxis`：签发 `log_id` |
+| `ea` | GET | `/en/job/gets` | 题目列表（含答案键） |
+| `Xi` | GET | `/en/resources/gets` | 文章列表 |
+| `ua` / `ha` | POST | `/en/yzm/createCaptcha` / `checkCaptcha` | 验证码 |
+
+关键发现：**每个请求都带 `checkParams` / `checkSign` 签名**。这意味着接口无法
+用 curl 重放，也解释了为什么必须用 Playwright 驱动真实页面——不是安装偏好，
+是硬约束。
+
+### 文档内容
+
+9 节：基本事实、路由与组件、接口一览（浏览链路 + 写操作）、提交载荷字段语义
+（含 `lable` 这个拼写坑、`is_right` 的四种判定）、提交前三道关卡（读到底部守卫、
+确认框、路由变化）、验证码、答案键两种编码、**排错对照表**、未验证项。
+
+排错表把日志行映射到排查方向，例如
+`submit dialog did not open (readHint=…)` → 守卫未清除，
+`submit did not navigate after confirmSubmit` → POST 被拒。
+
+### 接入分发
+
+- `install_skill.PAYLOAD` 增加该条目（安装到 `<skill>/inferences/api_inference.md`）
+- `pyproject.toml` 的 wheel `force-include` 与 `sdist.include` 同步
+- `test_doc_roles.EXEC_DOCS` 增加该路径，打包集合校验（`share/` == payload）随之通过
+- `SKILL.md` 加一行指引：出错先看这份文档，日常使用不需要读
+
+验证：wheel 构建后确认含 `elang/share/inferences/api_inference.md`；
+实际 `install_copy()` 到临时目录，文件落在 `inferences/api_inference.md`；
+全套 15 个测试脚本通过。
+
 

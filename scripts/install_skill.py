@@ -93,6 +93,9 @@ PAYLOAD = [
     ("SETUP.md", "SETUP.md"),          # install/config steps
     (".env.example", ".env.example"),  # credential template
     ("README.md", "README.md"),        # human/user overview
+    # Site map for diagnosing failures: which endpoint runs at which step, what
+    # page state can block the flow, and what a given log line means.
+    ("inferences/api_inference.md", "inferences/api_inference.md"),
 ]
 
 HOME = Path(os.path.expanduser("~"))
