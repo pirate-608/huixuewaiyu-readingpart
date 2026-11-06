@@ -255,7 +255,7 @@ def _load_answer_bank():
                 _key = _normalize_title(_title)
                 if not _key:
                     continue
-                if len(_key) < 6:
+                if len(_key) < BANK_MIN_KEY_LEN:
                     skipped_short += 1
                     continue
                 _ANSWER_BANK[_key] = {"answers": _ans, "title": _title,
@@ -301,6 +301,13 @@ def _title_words(title):
 _BANK_FORMATS = {
     "letter", "letters", "letter_and_fill", "fill_in_blank", "fill",
 }
+
+# Shortest normalized title the bank will index. It used to be 6, which silently
+# dropped real entries whose titles are short words ("tree", "sleep", "El Niño",
+# "IT Job"). 4 is safe because a short key only ever takes part in the EXACT
+# match; the substring step below separately requires 10+ characters, and no
+# 4-5 character key here is a substring of another title.
+BANK_MIN_KEY_LEN = 4
 
 
 def _bank_format_supported(ans):
@@ -436,7 +443,7 @@ def _match_answer_bank(article_title):
     if not _ANSWER_BANK:
         return None, None
     art_key = _normalize_title(article_title)
-    if not art_key or len(art_key) < 6:
+    if not art_key or len(art_key) < BANK_MIN_KEY_LEN:
         return None, None
 
     # 1) Exact match on the normalised key

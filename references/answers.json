@@ -1,6 +1,6 @@
 {
-    "description": "慧学外语阅读题目答案库（来自论坛整理）",
-    "article_count": 93,
+    "description": "慧学外语阅读题目答案库（来自论坛整理）；已合并社区题库 4drvuezy.docx",
+    "article_count": 127,
     "articles": [
         {
             "title": "The Widernet Project",
@@ -252,8 +252,8 @@
             "category": "旅游与交通",
             "type": "reading",
             "answers": {
-                "raw": "BAAAB  CB personal freedom of mobility   75 percent    his vision and leadership",
-                "format": "letter",
+                "raw": "BAAAB  CB  personal freedom of mobility  75 percent  his vision and leadership",
+                "format": "letter_and_fill",
                 "letters": [
                     "B",
                     "A",
@@ -262,6 +262,20 @@
                     "B",
                     "C",
                     "B"
+                ],
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "personal freedom of mobility"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "75 percent"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "his vision and leadership"
+                    }
                 ]
             },
             "skip_reason": null
@@ -762,14 +776,14 @@
             "category": "历史与文化",
             "type": "reading",
             "answers": {
-                "raw": "CADB(?)",
+                "raw": "CADBD",
                 "format": "letter",
                 "letters": [
                     "C",
                     "A",
                     "D",
                     "B",
-                    "?"
+                    "D"
                 ]
             },
             "skip_reason": null
@@ -918,87 +932,87 @@
                         "answer": "L"
                     },
                     {
-                        "index": 15,
+                        "index": 14,
                         "answer": "D"
                     },
                     {
-                        "index": 1,
+                        "index": 15,
                         "answer": "with"
                     },
                     {
-                        "index": 2,
+                        "index": 16,
                         "answer": "arranged"
                     },
                     {
-                        "index": 3,
+                        "index": 17,
                         "answer": "majority"
                     },
                     {
-                        "index": 4,
+                        "index": 18,
                         "answer": "proportion"
                     },
                     {
-                        "index": 5,
+                        "index": 19,
                         "answer": "similar"
                     },
                     {
-                        "index": 6,
+                        "index": 20,
                         "answer": "reaches"
                     },
                     {
-                        "index": 7,
+                        "index": 21,
                         "answer": "including"
                     },
                     {
-                        "index": 8,
+                        "index": 22,
                         "answer": "background"
                     },
                     {
-                        "index": 9,
+                        "index": 23,
                         "answer": "parents"
                     },
                     {
-                        "index": 10,
+                        "index": 24,
                         "answer": "whether"
                     },
                     {
-                        "index": 11,
+                        "index": 25,
                         "answer": "who"
                     },
                     {
-                        "index": 12,
+                        "index": 26,
                         "answer": "both"
                     },
                     {
-                        "index": 13,
+                        "index": 27,
                         "answer": "meeting"
                     },
                     {
-                        "index": 14,
+                        "index": 28,
                         "answer": "families"
                     },
                     {
-                        "index": 15,
+                        "index": 29,
                         "answer": "dating"
                     },
                     {
-                        "index": 16,
+                        "index": 30,
                         "answer": "before"
                     },
                     {
-                        "index": 17,
+                        "index": 31,
                         "answer": "decision"
                     },
                     {
-                        "index": 18,
+                        "index": 32,
                         "answer": "advice"
                     },
                     {
-                        "index": 19,
+                        "index": 33,
                         "answer": "marriage"
                     },
                     {
-                        "index": 20,
+                        "index": 34,
                         "answer": "rate"
                     }
                 ]
@@ -2405,83 +2419,83 @@
                         "answer": "swirled ready for danger"
                     },
                     {
-                        "index": 1,
+                        "index": 6,
                         "answer": "D"
                     },
                     {
-                        "index": 2,
+                        "index": 7,
                         "answer": "C"
                     },
                     {
-                        "index": 3,
+                        "index": 8,
                         "answer": "E"
                     },
                     {
-                        "index": 4,
+                        "index": 9,
                         "answer": "A"
                     },
                     {
-                        "index": 5,
+                        "index": 10,
                         "answer": "D"
                     },
                     {
-                        "index": 6,
+                        "index": 11,
                         "answer": "C"
                     },
                     {
-                        "index": 7,
+                        "index": 12,
                         "answer": "F"
                     },
                     {
-                        "index": 8,
+                        "index": 13,
                         "answer": "B"
                     },
                     {
-                        "index": 1,
+                        "index": 14,
                         "answer": "species"
                     },
                     {
-                        "index": 2,
+                        "index": 15,
                         "answer": "protective"
                     },
                     {
-                        "index": 3,
+                        "index": 16,
                         "answer": "survived"
                     },
                     {
-                        "index": 4,
+                        "index": 17,
                         "answer": "adopt"
                     },
                     {
-                        "index": 5,
+                        "index": 18,
                         "answer": "Apart from"
                     },
                     {
-                        "index": 6,
+                        "index": 19,
                         "answer": "adapt"
                     },
                     {
-                        "index": 7,
+                        "index": 20,
                         "answer": "poisonous"
                     },
                     {
-                        "index": 8,
+                        "index": 21,
                         "answer": "went down"
                     },
                     {
-                        "index": 9,
+                        "index": 22,
                         "answer": "creatures"
                     },
                     {
-                        "index": 10,
+                        "index": 23,
                         "answer": "blend"
                     },
                     {
-                        "index": 11,
+                        "index": 24,
                         "answer": "as a result"
                     },
                     {
-                        "index": 12,
+                        "index": 25,
                         "answer": "in danger"
                     }
                 ]
@@ -2513,27 +2527,27 @@
                         "answer": "I"
                     },
                     {
-                        "index": 1,
+                        "index": 5,
                         "answer": "A"
                     },
                     {
-                        "index": 2,
+                        "index": 6,
                         "answer": "N"
                     },
                     {
-                        "index": 3,
+                        "index": 7,
                         "answer": "C"
                     },
                     {
-                        "index": 4,
+                        "index": 8,
                         "answer": "G"
                     },
                     {
-                        "index": 1,
+                        "index": 9,
                         "answer": "M"
                     },
                     {
-                        "index": 2,
+                        "index": 10,
                         "answer": "O"
                     }
                 ]
@@ -2648,6 +2662,1086 @@
                 ]
             },
             "skip_reason": null
+        },
+        {
+            "title": "The Industrial Revolution",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)  C  (2)  A  (3)  A  (4)  D  (5)  B  (6)  B  (7)  A  (8)  C  (9)  C  (10)  D  (11)  D  (12)  C  (13)  B  (14)  A  (15)  D  (16)  C  (17)  B  (18)  A  (19)  B  (20)  D",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 11,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 12,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 13,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 14,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 15,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 16,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 17,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 18,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 19,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 20,
+                        "answer": "D"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Slow Hope",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": {
+                "raw": "(1) E (2) I (3) C (4) K (5) D (6) G (7) A (8) F (9) I (10) B",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "E"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "I"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "K"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "G"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "F"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "I"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "B"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "The Power of the Press",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": null,
+            "skip_reason": "答案在截图（不建议）"
+        },
+        {
+            "title": "The Exploration of the \"New World\"",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": {
+                "raw": "(1) roam (2) teem (3) rugged (4) desolate (5) spectacular (6) persecuted (7) prolific (8) commercial (9) fashion",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "roam"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "teem"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "rugged"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "desolate"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "spectacular"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "persecuted"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "prolific"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "commercial"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "fashion"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Foreign Accents",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": {
+                "raw": "BBBAB  BAA  (1)  get in the way & get in her way   (2)  sort out   (3)  fit in with   (4)  picked up   (5)  judge...by   (6)  feel at ease   (7)  take...for   (8)  sort...into   (9)  get rid of   (10)  offend their ears",
+                "format": "letter_and_fill",
+                "letters": [
+                    "B",
+                    "B",
+                    "B",
+                    "A",
+                    "B",
+                    "B",
+                    "A",
+                    "A"
+                ],
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "get in the way & get in her way"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "sort out"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "fit in with"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "picked up"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "judge...by"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "feel at ease"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "take...for"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "sort...into"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "get rid of"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "offend their ears"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Detour to Romance",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": {
+                "raw": "ABBAB",
+                "format": "letter",
+                "letters": [
+                    "A",
+                    "B",
+                    "B",
+                    "A",
+                    "B"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "A Merry Christmas",
+            "category": "历史与文化",
+            "type": "reading",
+            "answers": {
+                "raw": "CCABC  C",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "C",
+                    "A",
+                    "B",
+                    "C",
+                    "C"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Reading — A Special Kind of Conversation",
+            "category": "文学与艺术",
+            "type": "reading",
+            "answers": {
+                "raw": "BDACA",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "D",
+                    "A",
+                    "C",
+                    "A"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Why We Tend To Imitate Others?",
+            "category": "文学与艺术",
+            "type": "reading",
+            "answers": {
+                "raw": "CBAAD",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "B",
+                    "A",
+                    "A",
+                    "D"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "\"United 93\"",
+            "category": "文学与艺术",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)causing a reaction  (2)  an emotional debate (3)  The approval of every victim’s family  (4)  exploiting a national tragedy  (5)  raise the awareness",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "causing a reaction"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "an emotional debate"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "The approval of every victim’s family"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "exploiting a national tragedy"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "raise the awareness"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Cooking and Cuisines",
+            "category": "文学与艺术",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)  separates   (2)  appeal   (3)  acknowledged   (4)  distinguished   (5)  perfection   (6)  persisted   (7)  threats   (8)  transportation&transport   (9)  used   (10)  convenience   (11)  women   (12)  influence  (1)  for   (2)  with   (3)  of   (4)  with   (5)  on   (6)  up   (7)  to   (8)  to   (9)  into   (10)  on  (1)  peeled   (2)  slicing   (3)  Beat   (4)  stirred   (5)  Chop   (6)  Mash   (7)  kneaded   (8)  Snip",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "separates"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "appeal"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "acknowledged"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "distinguished"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "perfection"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "persisted"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "threats"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "transportation&transport"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "used"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "convenience"
+                    },
+                    {
+                        "index": 11,
+                        "answer": "women"
+                    },
+                    {
+                        "index": 12,
+                        "answer": "influence"
+                    },
+                    {
+                        "index": 13,
+                        "answer": "for"
+                    },
+                    {
+                        "index": 14,
+                        "answer": "with"
+                    },
+                    {
+                        "index": 15,
+                        "answer": "of"
+                    },
+                    {
+                        "index": 16,
+                        "answer": "with"
+                    },
+                    {
+                        "index": 17,
+                        "answer": "on"
+                    },
+                    {
+                        "index": 18,
+                        "answer": "up"
+                    },
+                    {
+                        "index": 19,
+                        "answer": "to"
+                    },
+                    {
+                        "index": 20,
+                        "answer": "to"
+                    },
+                    {
+                        "index": 21,
+                        "answer": "into"
+                    },
+                    {
+                        "index": 22,
+                        "answer": "on"
+                    },
+                    {
+                        "index": 23,
+                        "answer": "peeled"
+                    },
+                    {
+                        "index": 24,
+                        "answer": "slicing"
+                    },
+                    {
+                        "index": 25,
+                        "answer": "Beat"
+                    },
+                    {
+                        "index": 26,
+                        "answer": "stirred"
+                    },
+                    {
+                        "index": 27,
+                        "answer": "Chop"
+                    },
+                    {
+                        "index": 28,
+                        "answer": "Mash"
+                    },
+                    {
+                        "index": 29,
+                        "answer": "kneaded"
+                    },
+                    {
+                        "index": 30,
+                        "answer": "Snip"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Interpreting Dreams",
+            "category": "文学与艺术",
+            "type": "reading",
+            "answers": {
+                "raw": "BACD",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "A",
+                    "C",
+                    "D"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Chinese way of dating",
+            "category": "文学与艺术",
+            "type": "reading",
+            "answers": {
+                "raw": "CBD  （1）happened to  (1)  not   (2)  at all  (1)  except for",
+                "format": "letter_and_fill",
+                "letters": [
+                    "C",
+                    "B",
+                    "D"
+                ],
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "happened to"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "not"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "at all"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "except for"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Office Politics and Career Advancement",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "CDBDB",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "D",
+                    "B",
+                    "D",
+                    "B"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Salary Negotiation Strategies",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "DBADC",
+                "format": "letter",
+                "letters": [
+                    "D",
+                    "B",
+                    "A",
+                    "D",
+                    "C"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Specialization and Liberal Arts in Careers",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "CBAAD",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "B",
+                    "A",
+                    "A",
+                    "D"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Where Diversity Takes Place",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "DBCAD",
+                "format": "letter",
+                "letters": [
+                    "D",
+                    "B",
+                    "C",
+                    "A",
+                    "D"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Attention to Detail",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "ACADC",
+                "format": "letter",
+                "letters": [
+                    "A",
+                    "C",
+                    "A",
+                    "D",
+                    "C"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "The British Balance: When Less Productivity Means More Life",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "BBBAD",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "B",
+                    "B",
+                    "A",
+                    "D"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Science of Setbacks: How Failure Can Improve Career Prospects",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)  G   (2)  D   (3)  K   (4)  B   (5)  I   (6)  F   (7)  J   (8)  C   (9)  I   (10)  E",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "G"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "K"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "I"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "F"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "J"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "I"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "E"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Educators and Business Leaders",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "CABCB",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "A",
+                    "B",
+                    "C",
+                    "B"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Skilled Elders Work Longer, Unskilled Young Drop Out",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "BBACD",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "B",
+                    "A",
+                    "C",
+                    "D"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Is It Possible to Work 22-Hour Days?",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "CAACB",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "A",
+                    "A",
+                    "C",
+                    "B"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "A Woman Scientist",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "BACDC",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "A",
+                    "C",
+                    "D",
+                    "C"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "From Accountant to Yogi: Making a Radical Career Change",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)  G   (2)  D   (3)  L   (4)  B   (5)  F   (6)  C   (7)  H   (8)  A   (9)  K   (10)  E",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "G"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "L"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "F"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "H"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "K"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "E"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "How to Succeed at Failing",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": null,
+            "skip_reason": "点击完成阅读即可"
+        },
+        {
+            "title": "Length of the Workday",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "CADBA",
+                "format": "letter",
+                "letters": [
+                    "C",
+                    "A",
+                    "D",
+                    "B",
+                    "A"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "IT Job",
+            "category": "职业与发展",
+            "type": "reading",
+            "answers": {
+                "raw": "BCDDD  A",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "C",
+                    "D",
+                    "D",
+                    "D",
+                    "A"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Disputed Refereeing",
+            "category": "运动与娱乐",
+            "type": "reading",
+            "answers": {
+                "raw": "BCACB",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "C",
+                    "A",
+                    "C",
+                    "B"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Sportsmanship and Language Reform",
+            "category": "运动与娱乐",
+            "type": "reading",
+            "answers": {
+                "raw": "BDDAC",
+                "format": "letter",
+                "letters": [
+                    "B",
+                    "D",
+                    "D",
+                    "A",
+                    "C"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Body Change After Exercises",
+            "category": "运动与娱乐",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)  O   (2)  I   (3)  E   (4)  G   (5)  M   (6)  D   (7)  C   (8)  J   (9)  N   (10)  F",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "O"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "I"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "E"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "G"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "M"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "J"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "N"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "F"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "Professional Athletes on Newspapers",
+            "category": "运动与娱乐",
+            "type": "reading",
+            "answers": {
+                "raw": "(1)  A   (2)  D   (3)  B   (4)  A   (5)  C   (6)  A   (7)  C   (8)  B   (9)  A   (10)  C   (11)  A   (12)  A   (13)  B   (14)  B   (15)  A   (16)  D   (17)  A   (18)  B   (19)  C   (20)  A",
+                "format": "fill_in_blank",
+                "fill_in_blank": [
+                    {
+                        "index": 1,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 2,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 3,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 4,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 5,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 6,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 7,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 8,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 9,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 10,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 11,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 12,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 13,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 14,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 15,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 16,
+                        "answer": "D"
+                    },
+                    {
+                        "index": 17,
+                        "answer": "A"
+                    },
+                    {
+                        "index": 18,
+                        "answer": "B"
+                    },
+                    {
+                        "index": 19,
+                        "answer": "C"
+                    },
+                    {
+                        "index": 20,
+                        "answer": "A"
+                    }
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "The Secret to Eating Less and Being Happy",
+            "category": "运动与娱乐",
+            "type": "reading",
+            "answers": {
+                "raw": "DDBAC",
+                "format": "letter",
+                "letters": [
+                    "D",
+                    "D",
+                    "B",
+                    "A",
+                    "C"
+                ]
+            },
+            "skip_reason": null
+        },
+        {
+            "title": "What Makes TV Most Entertaining?",
+            "category": "运动与娱乐",
+            "type": "reading",
+            "answers": {
+                "raw": "ABBAA  BAABB",
+                "format": "letter",
+                "letters": [
+                    "A",
+                    "B",
+                    "B",
+                    "A",
+                    "A",
+                    "B",
+                    "A",
+                    "A",
+                    "B",
+                    "B"
+                ]
+            },
+            "skip_reason": null
         }
+    ],
+    "sources": [
+        "论坛整理",
+        "社区题库 4drvuezy.docx"
     ]
 }
