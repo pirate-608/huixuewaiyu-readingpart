@@ -241,6 +241,28 @@ CAS 自动登录（.env 凭据）
 每一步调了哪个接口、页面里哪些状态会挡住提交、日志里某一行对应什么问题、
 该检查哪个文件。那里面的站点内部结构是给**排错**用的，日常使用不需要读。
 
+### 源码是公开的，可以直接读
+
+安装的工具里是完整的明文 `.py`，没有编译或混淆。想知道某一步到底怎么做的，
+直接读它，不要猜。路径看 `elang doctor` 输出里的 `source` 行：
+
+```
+source      : C:\Users\<你>\AppData\Roaming\uv\tools\elang-reading\Lib\site-packages\elang (installed)
+```
+
+`elang_reader.py` 是引擎（抓题、作答、提交），`elang_session.py` 是 MCP 状态机，
+`config.py` 是凭据与路径解析。
+
+**但改动要不要落在安装目录，必须分清**：
+
+| 布局 | 能否直接改 | 说明 |
+|---|---|---|
+| `repo` | 可以 | 仓库检出，改完立即生效 |
+| `installed` | **不建议** | 是只读副本，`uv tool install/upgrade` 会覆盖掉 |
+
+安装版上临时改代码只能救急，**长期生效的修复必须回到仓库**（提 PR 或改本地仓库后
+重装），否则下次升级就没了。
+
 实现细节、站点组件名与 Vue 陷阱见仓库中的 [CLAUDE.md](https://github.com/pirate-608/huixuewaiyu-readingpart/blob/master/CLAUDE.md)。
 那是**开发 agent** 的文档，不随 skill 分发。
 
