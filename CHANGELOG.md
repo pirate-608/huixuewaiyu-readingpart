@@ -4283,4 +4283,48 @@ P3 清理（全部是死代码，删除前逐一 grep 确认无引用）：
 实际 `install_copy()` 到临时目录，文件落在 `inferences/api_inference.md`；
 全套 15 个测试脚本通过。
 
+---
+
+## 61. 源码继续公开分发，并让 agent 找得到、改对地方
+
+结论：**继续发布明文源码**。理由不是"开源更好"，而是使用场景决定的——运行期出问题
+时，执行 agent 只有读到**正在执行的那份代码**才能判断，而不是靠文档推断。
+实测确认 wheel 里是 12 个普通 `.py`（`elang_reader.py` 117 KB 等），
+没有编译、没有混淆，安装后就在 site-packages 里可直接打开。
+
+### 新增：`doctor` 报出源码位置
+
+```
+source      : ...\uv\tools\elang-reading\Lib\site-packages\elang (installed)
+```
+
+`--json` 里对应 `source: {path, layout, entry_module}`。`layout` 是 `repo` 或
+`installed`——这个区分才是关键，见下。
+
+### 必须讲清的一条：改安装目录会丢
+
+`uv tool install` 装的是虚拟环境里的一份拷贝。在 `installed` 布局上打补丁能救急，
+但下次 `uv tool upgrade` / 重装会**整个覆盖**。所以：
+
+| 布局 | 能直接改吗 | 后果 |
+|---|---|---|
+| `repo` | 可以 | 立即生效 |
+| `installed` | 只能救急 | 升级即丢失 |
+
+长期生效的修复必须回到仓库。这条写进了 `SKILL.md`，避免 agent 在线修完、
+用户升级后又复现同一个 bug。
+
+### 顺带发现：本机安装的是旧版
+
+核对时发现 `%APPDATA%\uv\tools\elang-reading` 里的 `elang_reader.py`
+**没有** `_answers_from_keys` / `satisfy_read_guard` / `BANK_MIN_KEY_LEN`，
+即今天这几轮（读到底部守卫、答案键、题库合并）都没进去。用旧版跑会表现为
+"提交看似成功但站点没记录"，还会错过答案键。已提醒用户重装：
+
+```bash
+uv tool install --force git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
+```
+
+这也是"源码公开"的另一个用处：能直接比对安装版和仓库版的差异，一眼看出是不是旧版。
+
 

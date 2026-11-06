@@ -169,6 +169,29 @@ def _redact_credentials(creds):
     }
 
 
+def check_source():
+    """Where the RUNNING code lives, so a debugging agent can open it.
+
+    The wheel ships plain `.py` files (no compilation), so an agent can read and
+    reason about the exact code that is executing. Reporting the path turns "I
+    think it works like X" into "I read line N of X".
+
+    `layout` matters on its own: a `repo` checkout is a live source tree the agent
+    may edit directly, while `installed` is a copy inside the tool's virtualenv
+    that the next `uv tool install`/`upgrade` overwrites. Fixes must go upstream
+    either way, but only the first keeps them without a reinstall.
+    """
+    here = Path(__file__).resolve().parent
+    repo = here.parent
+    is_repo = (repo / "pyproject.toml").is_file() and (repo / "scripts").is_dir()
+    entry = here / "elang_reader.py"
+    return {
+        "path": str(here),
+        "layout": "repo" if is_repo else "installed",
+        "entry_module": str(entry) if entry.is_file() else None,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -189,6 +212,7 @@ def main():
         "borrowed_modules": borrowed,
         "browser": browser,
         "credentials": _redact_credentials(creds),
+        "source": check_source(),
     }
 
     if args.json:
@@ -198,6 +222,11 @@ def main():
     print("=" * 64)
     print("interpreter :", sys.executable)
     print("python      :", report["python"], "| in venv:", report["in_venv"])
+    src = report["source"]
+    print("source      :", src["path"], f"({src['layout']})")
+    if src["layout"] == "installed":
+        print("              read-only copy: fixes belong in the repo, then "
+              "reinstall")
     print("=" * 64)
 
     print("\n-- modules --")
