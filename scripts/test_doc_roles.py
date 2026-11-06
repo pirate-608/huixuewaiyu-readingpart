@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 
 EXEC_DOCS = {"SKILL.md", "SETUP.md", ".env.example", "README.md",
-             "inferences/api_inference.md"}
+             "references/api_inference.md"}
 DEV_DOCS = {
     "CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "DISTRIBUTION.md",
 }

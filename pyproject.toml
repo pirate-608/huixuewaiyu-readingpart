@@ -86,14 +86,14 @@ packages = ["src/elang"]
 "SETUP.md" = "elang/share/SETUP.md"
 ".env.example" = "elang/share/.env.example"
 "README.md" = "elang/share/README.md"
-"inferences/api_inference.md" = "elang/share/inferences/api_inference.md"
+"references/api_inference.md" = "elang/share/references/api_inference.md"
 
 [tool.hatch.build.targets.sdist]
 include = [
   "src/elang",
   "scripts/*.py",
   "references/answers.json",
-  "inferences/api_inference.md",
+  "references/api_inference.md",
   "README.md",
   "requirements.txt",
 ]
