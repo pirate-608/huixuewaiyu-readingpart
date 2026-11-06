@@ -4522,4 +4522,53 @@ dry_run: 'dry-run'                          ← 走完但未提交
 新增答案键用例 4 项（`type_id 2` 及其缺失/空值情形），`test_answer_key` 现 27 项；
 全套 15 个测试脚本通过。
 
+---
+
+## 65. 真提交一次，判分闭环验证：16/16，正确率 100%
+
+上一节只验证到"答案被应用、提交被接受"，没有验证**判分是否正确**。这次对
+`BBC Experience` 真提交一次（用户授权，消耗该篇一次答题机会）。
+
+### 结果
+
+```
+闸门 gated=True → OCR '4757' 首猜命中 → 3 题加载
+答案键 ALL COVERED → 应用 3/3 → 守卫 hint='' → confirmSubmit -> OK
+POST /en/jobAnswer/save            200, code=100
+POST /en/resources/updateUserStudy 200, code=100
+路由 → #/pc/read/detail?resource_id=1943
+列表 → isCompleted=true, status=2（已完成）
+详情页 → 共16题，答对16题，正确率：100.00%
+```
+
+三题全部满分，其中**题3 正是 `type_id 2`**（4 空）：
+
+```
+题3 正确答案：(1) a few exhibits (2) multiscreen video diary
+              (3) interactive room (4) sports
+```
+
+这三条答案正是从 `optionsArray[n].title` 取出来的，与服务端"正确答案"逐字一致。
+所以 `type_id 2` 的答案来源判断**已经实锤**，不再是反推的假设。
+
+### 一个重要的方法论修正
+
+`code: 100` **只说明接口接受了提交，不代表答对**。此前把它当作"提交成功"的判据
+是对的，但绝不能当作"答对"的判据。验证判分唯一可靠的方式是打开详情页
+`#/pc/read/detail?resource_id=<id>` 读 `PcPracticeDetail`：
+
+- 页面文本直接给出「共 N 题，答对 M 题」「正确率 X%」与每题的「正确答案」
+- 组件数据里 `jobList` 含逐题正确答案，`flatAnswers` 是扁平化的逐空答案
+
+这条已写成 `inferences/api_inference.md` 的 8.4 节，作为将来验证题库/答案键
+是否正确的标准手段：**逐篇提交后读详情页，而不是猜**。
+
+### 顺带确认
+
+`type_id 5` 提交的值形如 `H-What is the BBC…`（字母 + 选项文本），
+而 `buildSubmitData` 做题时用 `answer.split("-")[0]` 取字母比对——
+即"字母"和"字母-文本"两种写法服务端都认，这条也被这次满分验证覆盖。
+
+全套 15 个测试脚本通过。
+
 
