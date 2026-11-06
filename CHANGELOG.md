@@ -4327,4 +4327,74 @@ uv tool install --force git+https://github.com/pirate-608/huixuewaiyu-readingpar
 
 这也是"源码公开"的另一个用处：能直接比对安装版和仓库版的差异，一眼看出是不是旧版。
 
+---
+
+## 62. 验证码：三问的答案与一次实测
+
+用户提出三个问题：ddddocr 为什么不装、它和视觉模型谁优先、整条解题路径能不能跑通。
+逐个查证并有针对性地补了文档与提示。
+
+### 1. ddddocr 默认不装，是有意的
+
+`pyproject.toml` 里它是**可选 extra**：
+
+```toml
+[project.optional-dependencies]
+ocr = ["ddddocr>=1.5.0", "Pillow>=10.0.0"]
+```
+
+`uv tool install <url>` 只装主依赖，所以 `elang doctor` 显示 `ddddocr MISSING`
+**不是装错了**。它拖 onnxruntime + opencv，体积大，而缺少时引擎只是降级到
+"交接给视觉模型或人工"，并不失效——这条降级是 P0 之前就写好的。
+
+顺带确认：连项目自己的 `.venv` 里也没有 ddddocr，也就是说 **OCR 分支从来没被真正
+执行过**，这正是"未经考验"的来源。
+
+**补的文档**：`SETUP.md` 新增"可选：验证码 OCR"小节，给出安装命令
+（`uv tool install --with ddddocr --with Pillow <url>`），并说明不装也能用。
+`doctor` 在 ddddocr 缺失时直接打印这段提示，避免 `MISSING` 被误读成环境坏了。
+
+### 2. 优先级：手动 > OCR > 交接
+
+读代码确认的顺序（`wait_for_captcha()`）：
+
+| 顺序 | 触发条件 | 行为 |
+|---|---|---|
+| 1 | `ELANG_CAPTCHA_MANUAL=1` | 完全不碰页面，等用户自己输 |
+| 2 | ddddocr 可导入 | 最多 3 次 OCR，图没换就停 |
+| 3 | 前两级都没解决 | 图片+请求写到 IPC，等作答方给码，上限 600 秒 |
+
+**关键澄清**：所谓"视觉模型"不是引擎内置的自动识别，而是**文件交接**——
+必须有能读图的 agent 去读 `elang_captcha_image.png` 再写答案。运行它的模型
+读不了图时，这一级等于不存在，只能干等 600 秒。`SKILL.md` 现在明确写了
+"先确认你自己能不能读图"，读不了就改用 `ELANG_CAPTCHA_MANUAL=1`。
+
+### 3. 实测：交接与提交是通的，判对错也正确
+
+用一次性 profile 主动触发验证码跑了一遍（不提交任何答案）：
+
+| 阶段 | 实测 |
+|---|---|
+| 触发 | `refreshCaptcha()` 后图从 0 → 约 7.5 KB，但 `jobs` 仍为 6，**不构成闸门** |
+| 闸门判据 | 清空 `jobList` 后 `gated=True`——判据确实是"有图 + 无题" |
+| OCR 缺失 | 打印 `ddddocr unavailable`，`OCR could not solve it (tried [])`，**不崩**，直接降级 |
+| 交接 | 请求文件约 400 B、图片约 5.9 KB 均正常写出 |
+| 提交 | 故意写错的码被发送；服务端拒绝并**换图**（7570→7786 B），`jobs` 仍 0 |
+| 重试 | 识别到图变了 → 重新发起请求；两次都能正确判失败，未死循环 |
+| 超时 | 等满上限后返回 `False`，答案文件被删除 |
+
+**未验证**：正确的码能否清闸（当时既无 ddddocr 也无可读图模型），
+以及 ddddocr 的实际识别率。已知要先装 ddddocr 才能测。
+
+### 4. "做了十篇才触发"这个阈值没有实测
+
+按用户的观察记下，但**没有写进任何逻辑**。引擎是被动响应：每篇进入时探测闸门，
+不预测触发时机。文档里标注为未验证，避免以后被当成规则。
+
+顺带修了 `test_docs_match_code` 的一处误报：它把 `SETUP.md` 里 uv 自己的
+`--with` 当成 elang 的参数，已加入 `EXTERNAL_FLAGS` 允许列表（该集合本就是为
+"文档中引用的外部工具参数"准备的）。
+
+全套 14 个测试脚本通过。
+
 

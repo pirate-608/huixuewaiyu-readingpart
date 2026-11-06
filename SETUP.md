@@ -65,6 +65,22 @@ elang list
 
 应列出：`doctor` `init-env` `install-browser` `setup-mcp` `install-skill` `run` `mcp`，以及答题侧动词 `pending` `answer` `skip` `continue` `stop`
 
+### 可选：验证码 OCR（默认不装）
+
+`ddddocr` 是**可选依赖**，`uv tool install` 不会装它。这不是装漏了：
+它带 onnxruntime + opencv，体积大，而 `elang doctor` 报 `ddddocr MISSING`
+仍属正常。
+
+装它才有自动识别：
+
+```bash
+uv tool install --with ddddocr --with Pillow git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
+```
+
+不装也能用，只是验证码要交给视觉模型或人工（见 `SKILL.md` 阶段三）。
+**关键前提**：交给视觉模型要求运行它的 agent 真的能读图；读不了图时应当
+设 `ELANG_CAPTCHA_MANUAL=1`，让用户自己输，否则那一篇会白等 600 秒。
+
 **若 `uv` 不存在**：告诉用户，**不要擅自安装**（那是系统级决定）。
 替代方案：`git clone` 后自建 venv（`python -m venv .venv`，
 在 venv 里 `pip install -r requirements.txt`），从仓库运行 `scripts/elang_reader.py`。
