@@ -251,7 +251,7 @@ CAS 自动登录（.env 凭据）
 完成状态由应用自己的 `normalizeStatus` 判定，与界面显示一致。
 每篇做完会更新 `<ipc>/elang_checkpoint.json`。
 
-**出错了先看 [inferences/api_inference.md](inferences/api_inference.md)**（随 skill 一起安装）：
+**出错了先看 [references/api_inference.md](references/api_inference.md)**（随 skill 一起安装）：
 每一步调了哪个接口、页面里哪些状态会挡住提交、日志里某一行对应什么问题、
 该检查哪个文件。那里面的站点内部结构是给**排错**用的，日常使用不需要读。
 

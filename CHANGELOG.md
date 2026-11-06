@@ -4571,4 +4571,59 @@ POST /en/resources/updateUserStudy 200, code=100
 
 全套 15 个测试脚本通过。
 
+---
+
+## 66. 目录统一：`inferences/` 并入 `references/`
+
+用户指出仓库同时存在 `inferences/` 与 `references/`，两个名字语义重叠，且
+`references/` 才是 skill 的标准结构。已合并为单一的 `references/`。
+
+### 改动
+
+```
+inferences/api_inference.md  ->  references/api_inference.md
+（inferences/ 目录删除）
+```
+
+`references/` 现在装的是"随 skill 分发的参考资料"，其中只有
+`api_inference.md` 进入 skill payload：
+
+| 文件 | 随 skill 分发 | 说明 |
+|---|---|---|
+| `api_inference.md` | 是 | 站点接口与内部结构地图（排错用） |
+| `answers.json` | 否（另经 wheel 的 `elang/data/` 分发） | 题库，运行期数据 |
+| `answers.raw` | 否 | 题库原始文本 |
+| `parse_answers.py` | 否 | 开发用解析脚本 |
+
+同步更新的引用点（5 处，全部改为新路径）：
+
+- `scripts/install_skill.py` 的 `PAYLOAD`：安装到 `<skill>/references/api_inference.md`
+- `pyproject.toml` 的 wheel `force-include`：`elang/share/references/api_inference.md`
+- `pyproject.toml` 的 `sdist.include`
+- `scripts/test_doc_roles.py` 的 `EXEC_DOCS`（保证 `share/` 与 payload 集合一致）
+- `SKILL.md` 里的指引链接
+
+本节之前的条目用的是旧路径 `inferences/`，那是当时的真实状态，保留不改。
+
+### 升级路径已实测
+
+旧版安装的 skill 目录里会有 `inferences/api_inference.md`。实测重装：
+
+```
+before: ['SKILL.md', 'inferences/api_inference.md']
+    pruned 1 stale file(s) no longer in the payload
+after : ['.env.example', 'README.md', 'SETUP.md', 'SKILL.md',
+         'references/api_inference.md']
+```
+
+即 P1 加的 `prune_stale()` 正好覆盖了这次迁移：旧目录被清理、新目录就位，
+用户不需要手动删残留。
+
+### 验证
+
+- wheel 内容确认只有 `elang/share/references/api_inference.md`，无 `inferences`
+- 真实 `install_copy()` 落盘为 `references/api_inference.md`
+- `resolve_source("references/api_inference.md")` 正常解析到仓库路径
+- 全套 15 个测试脚本通过（含 `test_doc_roles` 的 payload↔share 集合校验）
+
 
