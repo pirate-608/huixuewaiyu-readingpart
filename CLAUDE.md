@@ -174,9 +174,27 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
   `readQuestions[i]=true`、`readingStayMs>120000`，并滚动文章容器到底部。
   引擎在 `submit()` 前调用 `satisfy_read_guard()`，并校验确认框真的打开、
   POST 后路由真的变化，任一失败按 `submit_failed` 记录
-- **题目数据自带答案键**：`jobList[].options_answer` 是服务端下发的正确答
-  案（实测 subject 25 全部 21 题都有），`optionsArray1[].title` 是填空题
-  的正确匹配顺序——运行时可直接据此作答，也可批量采集扩充 `references/answers.json`
+- **题目数据自带答案键**：`jobList[].options_answer` 是服务端下发的正确答案
+  （实测 subject 25 全部 21 题都有）。编码两种：`type_id 1` 是裸选项字母（`"B"`）；
+  `type_id 5/7/8` 是 `[{"title":"D","label":1},…]` 的 JSON，`title` 就是该空要填的
+  值，`optionsArray1` 是同一份数据的镜像（可作交叉校验/兜底）。
+  `_answer_key_from_job()` 解析、`_answers_from_keys()` 转成统一的
+  `[[qIndex, value], …]`，并作为**第一优先级**来源接在题库与 AI 之前
+  （见下方"作答来源优先级"）
+
+### 作答来源优先级
+
+`process_articles()` / `mode_solve()` / `ElangSession.open_next()` 三处一致：
+
+| 优先级 | 来源 | 命中条件 | 说明 |
+|---|---|---|---|
+| 1 | 页面答案键 | 每道题都解析出 key | 最新、最准、零延迟 |
+| 2 | 本地题库 | 标题匹配且题目形态吻合 | 离线、可审计 |
+| 3 | agent / AI 作答 | 前两级都没击中 | 走 IPC 或 MCP |
+
+**部分命中一律降级**：只有部分题目有答案键时整篇回退到题库/AI，不混用
+"一半来自 key、一半来自猜测"的答案。多选（`type_id 4`）与自由文本
+（`type_id 3/6`）不解析 key，同样走回退。
 
 ### Vue 访问的陷阱
 

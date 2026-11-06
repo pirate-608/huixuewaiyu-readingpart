@@ -272,19 +272,40 @@ class ElangSession:
             self.state = State.AWAITING_ANSWERS
             self.error = None
 
-            # Consult the answer bank so a known article skips the model entirely.
-            # The MCP path previously ignored it, which meant the bank only helped
-            # the CLI — an odd split, since MCP is the primary interface.
-            bank_note, bank_answers = self._bank_lookup(content, art)
+            # Consult the answer key the page ships first, then the bank. Both let a known
+            # article skip the model entirely; the key is always current, the bank
+            # can go stale.
+            key_answers, key_why = er._answers_from_keys(content["questions"])
             extra = {}
+            if key_answers is not None:
+                extra["bank_answers"] = key_answers
+                extra["answer_source"] = "page"
+                extra["hint"] = ("The page shipped the correct answers: pass "
+                                 "bank_answers straight to elang_submit_answers.")
+                return self.envelope(
+                    article={
+                        "index": art.get("index"),
+                        "resources_id": rid,
+                        "log_id": log_id,
+                        "title": content.get("title") or art.get("name"),
+                        "passage": content.get("passage"),
+                        "questions": self._describe_questions(content["questions"]),
+                    },
+                    **extra,
+                )
+
+            bank_note, bank_answers = self._bank_lookup(content, art)
             if bank_answers:
                 extra["bank_answers"] = bank_answers
+                extra["answer_source"] = "bank"
                 extra["hint"] = ("This article is in the answer bank: you may call "
                                  "elang_submit_answers with bank_answers directly.")
             else:
                 extra["hint"] = ("Answer every question, then call "
                                  "submit_answers. Fill questions need one value "
                                  "per blank.")
+            if key_why:
+                extra["key_note"] = key_why
             if bank_note:
                 extra["bank_note"] = bank_note
 
