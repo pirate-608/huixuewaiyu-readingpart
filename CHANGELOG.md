@@ -4178,4 +4178,61 @@ P3 清理（全部是死代码，删除前逐一 grep 确认无引用）：
 / `test_p0_safety` / `test_p1_safety` 全部通过；加载器冒烟测试确认 13 个代表性标题
 （含 4 个短标题与 2 个改进条目）匹配正常。
 
+---
+
+## 59. 运行时自动答题：直接使用页面自带的答案键
+
+第 57 节记录过 `jobList[].options_answer` 的存在，本节把它真正接进作答链路。
+效果：**大部分文章不再需要题库、也不再需要任何作答方**。
+
+### 编码（实测，两种）
+
+| `type_id` | `options_answer` 形态 | 例 | 含义 |
+|---|---|---|---|
+| 1（单选） | 裸选项字母 | `"B"` | 选 B |
+| 5 / 7 / 8（填空） | `[{"title":"D","label":1,"score":1},…]` 的 JSON | — | `label` 是空号，`title` 是该空要填的值 |
+
+填空的 `optionsArray1` 是同一份数据的镜像（`[{label,title}]`），用来交叉校验，
+`options_answer` 缺失时也可以独立兜底。`type_id 2` 也按填空处理。
+多选（4）与自由文本（3/6）**不解析**——`set_answers()` 没有多选的提交路径，
+硬做只会静默出错。
+
+### 实现
+
+- `_answer_key_from_job(job)`：从单个 job 解析出
+  `{"kind":"choice","labels":["B"]}` 或 `{"kind":"fill","values":["D","C",…]}`；
+  无法确信时返回 `None`。JSON 里的 `label` 会先排序，不依赖数组顺序。
+- `_answers_from_keys(questions)`：转成与题库完全相同的
+  `[[qIndex, value], …]`，选择题映射成 **0 起的选项下标**，填空题经
+  `_resolve_fill_value()` 走本空的选项映射（`"B"` → `"B-desert"`）。
+- `_build_questions()` 给每题挂上 `answer_key`，因此 `jobList` 的抓取逻辑
+  一行没改——`JSON.parse(JSON.stringify(d.jobList))` 本来就把整个字段带回来了。
+- 三处入口统一优先级：`process_articles()`、`mode_solve()`、
+  `ElangSession.open_next()`。MCP 侧 `open_next` 现在返回
+  `answer_source: "page" | "bank"`，调用方能知道命中哪一级。
+
+### 两条刻意的保守规则
+
+1. **部分命中就整篇降级**。只有一部分题目有答案键时，整篇回退到题库/AI，
+   绝不混用"一半来自 key、一半来自猜测"的答案。
+2. **裸字母在没有选项列表时放行，有选项但匹配不上时拒绝**。实测站点接受
+   `insertWordAnswers` 里的裸字母（`"D"`），所以没有 `select_options` 时直接透传；
+   但如果这一空确实有选项而字母不在其中，说明数据不对，宁可回退也不猜。
+
+### 验证
+
+- 单元测试 `scripts/test_answer_key.py` 23 项全过。夹具是实测抓下来的真实
+  payload 形态。写作过程中测试抓出两个真 bug：把解析失败的 JSON 串
+  （`"{not json"`）当成裸答案、以及无选项列表时把合法字母误判为不可解析。
+- **真实环境 dry-run**（`--limit 1 --dry-run`）：
+  `[KEY] the page shipped all 6 answer(s) — no bank/AI needed`，
+  6/6 应用、确认框打开、`readHint=''`、路由等待通过。
+  这篇此前必须等待人工作答，现在整篇零等待。
+- 全套 15 个测试脚本通过。
+
+### 与题库的关系
+
+不是替代，是叠加：答案键最快最准但依赖"站点继续下发它"；题库离线、可审计、
+可分享，站点改版后仍是退路。两者都不命中才落到 agent/AI 作答。
+
 

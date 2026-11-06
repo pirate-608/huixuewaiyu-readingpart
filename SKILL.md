@@ -48,11 +48,17 @@ MCP 模式下**没有任何 tool 会等待**。
 CLI 模式下只有 `elang run` 自己阻塞（它本就是长任务），**你侧的命令全部立即返回**。
 不要以等待 job 输出的方式轮询，那会让双方互相等待。
 
-**4. 先查题库，再自己答**
+**4. 先看答案键，再查题库，最后才自己答**
 
-题库覆盖的文章会自动完成，不要重复劳动。
-MCP 的 `open_next` 命中时返回 `bank_answers`，直接拿去提交即可。
-CLI 命中时由脚本直接提交，不会请求作答。
+三级来源，前面的命中就不需要你动手：
+
+1. **页面自带的答案键**——站点把正确答案随题目一起下发，最准也最新。
+   `open_next` 命中时返回 `bank_answers` 且 `answer_source="page"`。
+2. **本地题库**——命中时返回 `bank_answers` 且 `answer_source="bank"`。
+3. 两者都没命中，才轮到你读文章作答。
+
+只要 `open_next` 返回了 `bank_answers`，直接拿去提交即可，不要重复劳动。
+CLI 命中前两级时由脚本直接提交，不会请求作答。
 
 ---
 
@@ -115,7 +121,7 @@ elang_stop()                     关闭
 elang_start
   → elang_open_next            状态 awaiting_answers / awaiting_captcha / finished
   → （awaiting_captcha）elang_get_captcha → 读图 → elang_solve_captcha
-  → （有 bank_answers）直接 submit_answers(bank_answers)
+  → （有 bank_answers，来源见 answer_source 的 page/bank）直接 submit_answers(bank_answers)
   → （没有）按正文作答 → elang_submit_answers
   → 重复 open_next 直到 finished
 elang_stop

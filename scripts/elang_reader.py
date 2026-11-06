@@ -435,6 +435,159 @@ def _bank_answers_for(ans, questions):
     return out, None
 
 
+# ---- Answer key that the site itself ships -------------------------------
+# `PcReadPraxis.$data.jobList[i]` carries `options_answer`, i.e. the value the
+# server compares a submission against. Measured on the live site: 21 of 21
+# questions across 4 articles had it, in two encodings —
+#
+#   type_id 1 (single choice) : "B"                     -> an option label
+#   type_id 5/7/8 (word fill) : a JSON array of
+#        [{"title":"D","label":1},{"title":"C","label":2}, ...]
+#        whose `title` is what goes into `insertWordAnswers` for that blank.
+#        `optionsArray1` mirrors the same list as [{label,title}], so it is used
+#        as a cross-check / fallback when the field is absent.
+#
+# Using it is strictly better than the bank (current, never stale) and than an
+# AI round trip (instant), so it is tried FIRST with the bank as fallback.
+_FILL_TYPE_IDS = (2, 5, 7, 8)
+
+
+def _decode_fill_key(text, job):
+    """Decode a fill question's `options_answer` into per-blank values (in order)."""
+    # 1) JSON array of {title,label} — the usual encoding.
+    try:
+        arr = json.loads(text)
+    except Exception:
+        arr = None
+    if isinstance(arr, list) and arr and all(isinstance(e, dict) for e in arr):
+        pairs = []
+        for e in arr:
+            title = e.get("title")
+            if title is None or str(title).strip() == "":
+                return None
+            label = e.get("label")
+            try:
+                label = int(label)
+            except (TypeError, ValueError):
+                label = None
+            pairs.append((label, str(title).strip()))
+        if all(p[0] is not None for p in pairs):
+            pairs.sort(key=lambda p: p[0])
+        return [p[1] for p in pairs]
+    # 2) A bare value (single-blank question, or a plain text answer).
+    #    A string that merely LOOKS like JSON but failed to parse must not be
+    #    passed through as an answer — return None so the optionsArray1 mirror
+    #    gets a chance instead.
+    if text and len(text) <= 120 and not text[:1] in ("{", "["):
+        return [text]
+    return None
+
+
+def _answer_key_from_job(job):
+    """Extract this job's server-provided answer key, or None.
+
+    Returns `{"kind": "choice", "labels": ["B"]}` or
+    `{"kind": "fill", "values": ["D", "C", ...]}`.
+
+    Deliberately returns None (letting the bank/AI handle it) for anything not
+    confidently decodable: a wrong key is worse than no key.
+    """
+    tid = job.get("type_id")
+    if tid not in (1,) + _FILL_TYPE_IDS:
+        # type 4 is multi-select and set_answers() has no path for it, and
+        # types 3/6 are free text: neither is handled here.
+        return None
+
+    raw = job.get("options_answer")
+    text = raw.strip() if isinstance(raw, str) else ""
+
+    if tid == 1:
+        if text and len(text) == 1 and text.isalpha():
+            return {"kind": "choice", "labels": [text.upper()]}
+        return None
+
+    # ---- fill: prefer options_answer, fall back to optionsArray1 ----
+    values = None
+    if text:
+        values = _decode_fill_key(text, job)
+    if values is None:
+        mirrored = job.get("optionsArray1") or []
+        if mirrored and all(isinstance(e, dict) for e in mirrored):
+            pairs = []
+            for i, e in enumerate(mirrored, start=1):
+                title = e.get("title")
+                if title is None or str(title).strip() == "":
+                    pairs = []
+                    break
+                try:
+                    label = int(e.get("label"))
+                except (TypeError, ValueError):
+                    label = i
+                pairs.append((label, str(title).strip()))
+            if pairs:
+                pairs.sort(key=lambda p: p[0])
+                values = [p[1] for p in pairs]
+    if not values:
+        return None
+    return {"kind": "fill", "values": values}
+
+
+def _answers_from_keys(questions):
+    """Turn per-question `answer_key`s into `[[qIndex, value], ...]`.
+
+    Returns `(answers, None)` only when EVERY question has a usable key;
+    otherwise `(None, reason)` so the caller falls back to the bank / AI. A
+    partially keyed article is rejected on purpose: mixing keyed and guessed
+    answers is how a "submitted" result ends up wrong.
+    """
+    out = []
+    missing = []
+    for q in questions:
+        key = q.get("answer_key")
+        if not key:
+            missing.append(q.get("index"))
+            continue
+        if key.get("kind") == "choice":
+            labels = key.get("labels") or []
+            if len(labels) != 1:
+                return None, f"q{q.get('index')}: expected 1 label, got {labels}"
+            idx = _letter_to_option_index(labels[0], q)
+            if idx is None:
+                return None, (f"q{q.get('index')}: answer key label "
+                              f"{labels[0]!r} is not one of its options")
+            out.append([q["index"], idx])
+            continue
+        # fill
+        values = key.get("values") or []
+        n = q.get("blanks") or 1
+        if len(values) < n:
+            return None, (f"q{q.get('index')}: {n} blank(s) but the key has "
+                          f"{len(values)} value(s)")
+        resolved = []
+        for blank_i in range(n):
+            val = _resolve_fill_value(values[blank_i], q, blank_i)
+            if val is None:
+                raw_v = str(values[blank_i]).strip()
+                options_exist = any(q.get("select_options") or [])
+                # A bare letter with no option list to map through is exactly
+                # what `insertWordAnswers` takes — measured live, the site
+                # accepted "D" verbatim. Only refuse when there ARE options and
+                # the letter matches none of them, which means something is off.
+                if len(raw_v) == 1 and raw_v.isalpha() and not options_exist:
+                    val = raw_v
+                else:
+                    return None, (f"q{q.get('index')}: could not resolve fill "
+                                  f"key {values[blank_i]!r} for blank {blank_i + 1}")
+            resolved.append(val)
+        out.append([q["index"], resolved])
+
+    if missing:
+        return None, (f"{len(missing)} question(s) have no answer key "
+                      f"(index {missing[:6]})")
+    out.sort(key=lambda a: a[0])
+    return out, None
+
+
 def _match_answer_bank(article_title):
     """Look up an article title in the answer bank.
 
@@ -1159,6 +1312,10 @@ def _build_questions(jobs, blocks):
             "blanks": len(b.get("selects") or []) or
                       len([c for c in (job.get("titleChunks") or []) if c.get("isInput")]),
             "select_options": [s.get("options") for s in (b.get("selects") or [])],
+            # The site ships the correct answer with each job; carry it so the
+            # run can answer without the bank or an AI round trip. None when the
+            # encoding is unfamiliar — callers must then fall back.
+            "answer_key": _answer_key_from_job(job),
         })
     return questions
 
@@ -2159,20 +2316,33 @@ async def process_articles(page, article_infos, start_counter, learn_hash,
             json.dump({"title": content["title"], "passage": content["passage"],
                        "questions": questions}, f, ensure_ascii=False, indent=2)
 
-        # ---- answer bank: apply when it matches this article's exact shape ----
+        # ---- source 1: the answer key the page itself ships ----
+        # Current, exact, and needs no external answerer. The bank and the AI
+        # round trip stay as fallbacks for articles whose key is absent or in an
+        # encoding we do not decode.
         data = None
-        bank_ans, match_info = _match_answer_bank(content["title"] or name)
-        # Have to be careful: title could be different from the list name, e.g. maybe the title empty.
-        if not bank_ans and name and name != (content["title"] or ""):
-            bank_ans, match_info = _match_answer_bank(name)
-        if bank_ans:
-            bank_answers, why = _bank_answers_for(bank_ans, questions)
-            if bank_answers is not None:
-                data = {"status": "answers_ready", "answers": bank_answers}
-                print(f"  [BANK] matched ({match_info}) — "
-                      f"{len(bank_answers)} answer(s), skipping the AI round-trip")
-            else:
-                print(f"  [BANK] matched ({match_info}) but {why} — asking AI")
+        key_answers, key_why = _answers_from_keys(questions)
+        if key_answers is not None:
+            data = {"status": "answers_ready", "answers": key_answers}
+            print(f"  [KEY] the page shipped all {len(key_answers)} answer(s) — "
+                  f"no bank/AI needed")
+        else:
+            print(f"  [KEY] not used: {key_why}")
+
+        # ---- source 2: answer bank (exact shape required) ----
+        if data is None:
+            bank_ans, match_info = _match_answer_bank(content["title"] or name)
+            # Have to be careful: title could be different from the list name, e.g. maybe the title empty.
+            if not bank_ans and name and name != (content["title"] or ""):
+                bank_ans, match_info = _match_answer_bank(name)
+            if bank_ans:
+                bank_answers, why = _bank_answers_for(bank_ans, questions)
+                if bank_answers is not None:
+                    data = {"status": "answers_ready", "answers": bank_answers}
+                    print(f"  [BANK] matched ({match_info}) — "
+                          f"{len(bank_answers)} answer(s), skipping the AI round-trip")
+                else:
+                    print(f"  [BANK] matched ({match_info}) but {why} — asking AI")
 
         if data is None:
             article_data = {
@@ -2867,7 +3037,23 @@ async def mode_solve(url, dry_run=False):
             "status": "waiting_for_ai",
         }
 
-        data = await request_ai_answers(article_data)
+        # Same precedence as the batch path: the page's own answer key first.
+        key_answers, key_why = _answers_from_keys(content["questions"])
+        if key_answers is not None:
+            print(f"[elang] the page shipped all {len(key_answers)} answer(s) — "
+                  f"no answering round trip needed")
+            data = {"status": "answers_ready", "answers": key_answers}
+        else:
+            print(f"[elang] no answer key: {key_why}")
+            bank_ans, match_info = _match_answer_bank(content["title"])
+            bank_answers, why = (_bank_answers_for(bank_ans, content["questions"])
+                                 if bank_ans else (None, "no bank entry"))
+            if bank_answers is not None:
+                print(f"[elang] bank matched ({match_info})")
+                data = {"status": "answers_ready", "answers": bank_answers}
+            else:
+                print(f"[elang] bank not usable ({why}); asking for answers")
+                data = await request_ai_answers(article_data)
         if not data or data.get("status") not in ("answers_ready", "skip"):
             print("[elang] Timeout.")
             await context.close()
