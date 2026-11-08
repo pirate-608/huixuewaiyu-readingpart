@@ -48,6 +48,8 @@ debug.log
 
 /temp/  
 
+CHANGELOG.md
+
 # 项目级 skill 安装目标（由 install-skill --scope project 写入）。
 # 想随项目提交 skill（让协作者自动获得）时，删掉这几行即可。
 /.dsh/skills/
