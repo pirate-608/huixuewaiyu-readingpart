@@ -141,10 +141,48 @@ typed_blank = dict(typed, optionsArray=[{"title": "a"}, {"title": ""}])
 check("type 2 with an empty expected value yields no key",
       er._answer_key_from_job(typed_blank) is None)
 
-print("\n=== unsupported shapes are refused, not guessed ===")
-multi = dict(tf_job(9400, "A,B"), type_id=4)
-check("multi-select (type 4) is refused", er._answer_key_from_job(multi) is None)
+print("\n=== multi-select (type_id 4) ===")
+# options_answer holds the chosen labels joined by commas; the app grades by
+# comparing that same joined string, and its selectOption() TOGGLES for type 4.
+multi_job = {
+    "id": 9600,
+    "type_id": 4,
+    "title": "<p>choose all that apply</p>",
+    "optionsArray": [
+        {"label": "A", "title": "first", "is_check": 0},
+        {"label": "B", "title": "second", "is_check": 0},
+        {"label": "C", "title": "third", "is_check": 0},
+        {"label": "D", "title": "fourth", "is_check": 0},
+    ],
+}
+multi_job["options_answer"] = "A,C"
+key = er._answer_key_from_job(multi_job)
+check("a comma list becomes a multi key",
+      key == {"kind": "multi", "labels": ["A", "C"]}, str(key))
 
+key = er._answer_key_from_job(dict(multi_job, options_answer="a , c"))
+check("spacing and case are normalised", key == {"kind": "multi", "labels": ["A", "C"]},
+      str(key))
+
+check("a single label is still a valid multi key",
+      er._answer_key_from_job(dict(multi_job, options_answer="B"))
+      == {"kind": "multi", "labels": ["B"]})
+
+check("empty multi answer is refused",
+      er._answer_key_from_job(dict(multi_job, options_answer="")) is None)
+check("non-label multi answer is refused",
+      er._answer_key_from_job(dict(multi_job, options_answer="yes,no")) is None)
+
+qs = er._build_questions([multi_job], [])
+answers, why = er._answers_from_keys(qs)
+check("multi key converts to a list of option indexes",
+      answers == [[0, [0, 2]]], f"{answers} / {why}")
+
+bad = dict(multi_job, options_answer="A,Z")
+answers, why = er._answers_from_keys(er._build_questions([bad], []))
+check("a label outside the options is rejected", answers is None, str(why))
+
+print("\n=== unsupported shapes are refused, not guessed ===")
 free = dict(tf_job(9401, "anything"), type_id=3)
 check("free text (type 3) is refused", er._answer_key_from_job(free) is None)
 

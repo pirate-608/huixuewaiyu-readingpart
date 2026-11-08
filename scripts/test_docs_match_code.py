@@ -153,7 +153,11 @@ def _claims_cross_platform(text):
                for line in text.splitlines())
 
 
-check("README states Windows-only support", "只支持 Windows" in read("README.md"))
+# Accept the equivalent phrasings: the rule is that README states the scope, not
+# that it uses one exact wording.
+_check_win = [m for m in ("只支持 Windows", "仅支持 Windows") if m in read("README.md")]
+check("README states Windows-only support", bool(_check_win),
+      f"found: {_check_win or 'neither 只支持 Windows nor 仅支持 Windows'}")
 check("no document promises cross-platform support",
       not any(_claims_cross_platform(read(d)) for d in DOCS))
 check("the development guides forbid porting work",

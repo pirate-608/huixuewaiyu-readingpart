@@ -303,10 +303,30 @@ blocked=True → OCR attempt 1/3: '9153' → jobs 0->3 → [OK] CAPTCHA solved b
 
 ---
 
+### 8.5 浏览器控制台脚本（人工应急）
+
+`tools/browser/elang-console.js` 用于人已经在题目页、不想走 IPC 往返的场景。
+粘进 DevTools 控制台后使用：
+
+| 调用 | 作用 |
+|---|---|
+| `elang.status()` | 本题型、答案键可用性、读守卫状态 |
+| `elang.extract()` | 只列出答案，不改页面 |
+| `elang.answer()` | 应用答案并清除读守卫 |
+| `elang.submit()` | 应用后打开确认框（不提交） |
+| `elang.submit(true)` | 真正提交 |
+
+它与引擎共用同一套解码规则（`options_answer` / `optionsArray[n].title` /
+`optionsArray1` 镜像），本题多选走 `selectOption` 的切换语义，与
+`set_answers()` 一致。有题目拿不到答案键时它会拒绝提交并列出是哪几题。
+
 ## 9. 未验证 / 需谨慎
 
-- 多选（`type_id 4`）与自由文本（`3/6`）的答案键编码**未实测**，引擎不解析它们，
-  一律回退题库/AI；`set_answers` 也还没有多选的提交路径。
+- 多选（`type_id 4`）的答案键编码已实测：`options_answer` 是选中项 `label` 用逗号
+  拼接的字符串（`"A,C"`），与 `buildSubmitData` 拼出的判分串一致。引擎解析它，
+  并用应用自己的 `selectOption()` 逐项勾选。
+- 自由文本（`type_id 3/6`）在阅读题中**未出现过**（38 篇 / 204 题的采样里 0 例），
+  引擎不解析，如遇到会回退题库/AI。
 - `type_id 2` 的答案键来自 `optionsArray[n].title`，已通过一次真实提交验证
   （详情页 16/16，正确率 100%，见 8.4）。但样本只有一篇，`&` 分隔多写法
   （`transportation&transport`）取首项这条**未在真实判分里验证过**。

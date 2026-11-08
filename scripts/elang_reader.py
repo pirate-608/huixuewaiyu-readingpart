@@ -486,16 +486,17 @@ def _decode_fill_key(text, job):
 def _answer_key_from_job(job):
     """Extract this job's server-provided answer key, or None.
 
-    Returns `{"kind": "choice", "labels": ["B"]}` or
-    `{"kind": "fill", "values": ["D", "C", ...]}`.
+    Returns one of:
+        {"kind": "choice", "labels": ["B"]}
+        {"kind": "multi",  "labels": ["A", "C"]}
+        {"kind": "fill",   "values": ["D", "C", ...]}
 
     Deliberately returns None (letting the bank/AI handle it) for anything not
     confidently decodable: a wrong key is worse than no key.
     """
     tid = job.get("type_id")
-    if tid not in (1, 2) + _FILL_TYPE_IDS:
-        # type 4 is multi-select and set_answers() has no path for it, and
-        # types 3/6 are free text: neither is handled here.
+    if tid not in (1, 4, 2) + _FILL_TYPE_IDS:
+        # types 3/6 are free text: not handled.
         return None
 
     raw = job.get("options_answer")
@@ -504,6 +505,14 @@ def _answer_key_from_job(job):
     if tid == 1:
         if text and len(text) == 1 and text.isalpha():
             return {"kind": "choice", "labels": [text.upper()]}
+        return None
+
+    if tid == 4:
+        # Multi-select: `options_answer` is the chosen labels joined by commas,
+        # and the app grades by comparing that same joined string.
+        parts = [p.strip().upper() for p in re.split(r"[,\s]+", text) if p.strip()]
+        if parts and all(len(p) == 1 and p.isalpha() for p in parts):
+            return {"kind": "multi", "labels": parts}
         return None
 
     if tid == 2:
@@ -579,6 +588,20 @@ def _answers_from_keys(questions):
                 return None, (f"q{q.get('index')}: answer key label "
                               f"{labels[0]!r} is not one of its options")
             out.append([q["index"], idx])
+            continue
+        if key.get("kind") == "multi":
+            labels = key.get("labels") or []
+            if not labels:
+                return None, f"q{q.get('index')}: multi-select key has no labels"
+            indices = []
+            for lab in labels:
+                idx = _letter_to_option_index(lab, q)
+                if idx is None:
+                    return None, (f"q{q.get('index')}: answer key label "
+                                  f"{lab!r} is not one of its options")
+                if idx not in indices:
+                    indices.append(idx)
+            out.append([q["index"], indices])
             continue
         # fill
         values = key.get("values") or []
@@ -1575,6 +1598,30 @@ async def set_answers(page, answers):
                 }
                 notes.push('fill q' + qIdx + ': ' + out.length + ' blank(s)');
                 fill++;
+            } else if (job.type_id === 4) {
+                // Multi-select. The app's own selectOption() TOGGLES is_check when
+                // type_id is 4, so calling it blindly would deselect an already
+                // chosen option. Clear the flags first, then toggle the wanted
+                // ones on — the app keeps its own bookkeeping (has_answer,
+                // currentIndex) because the calls go through it.
+                const want = (Array.isArray(val) ? val : [val]).map(Number);
+                (job.optionsArray || []).forEach(o => { o.is_check = 0; });
+                let picked = 0;
+                for (const idx of want) {
+                    if (!(job.optionsArray || [])[idx]) {
+                        notes.push('q' + qIdx + ': option ' + idx + ' out of range');
+                        continue;
+                    }
+                    try {
+                        M.selectOption.call(vm, qIdx, idx);
+                        picked++;
+                    } catch (e) {
+                        notes.push('q' + qIdx + ': selectOption failed: ' + e.message);
+                    }
+                }
+                if (picked) { choice++; } else {
+                    notes.push('q' + qIdx + ': no option applied');
+                }
             } else {
                 // One bad answer must not reject the whole evaluate: report it in
                 // notes and let the caller decide (it will refuse to submit).

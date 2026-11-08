@@ -194,8 +194,12 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 | 3 | agent / AI 作答 | 前两级都没击中 | 走 IPC 或 MCP |
 
 **部分命中一律降级**：只有部分题目有答案键时整篇回退到题库/AI，不混用
-"一半来自 key、一半来自猜测"的答案。多选（`type_id 4`）与自由文本
-（`type_id 3/6`）不解析 key，同样走回退。
+"一半来自 key、一半来自猜测"的答案。自由文本（`type_id 3/6`）不解析 key，
+同样走回退。
+
+多选（`type_id 4`）的 key 是逗号串（`"A,C"`）。应用自己的 `selectOption()`
+在 type 4 下是**切换语义**（`is_check` 取反），所以 `set_answers()` 会先清空
+该题的 `is_check` 再逐项打开，避免把已选项又点掉。
 
 ### Vue 访问的陷阱
 

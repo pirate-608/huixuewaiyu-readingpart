@@ -322,6 +322,7 @@ huixuewaiyu-readingpart/
 ├── references/                 # 题库与站点接口说明，answers.json 同时打进 wheel
 └── tools/                      # 仓库内的辅助工具，不随 skill 分发
     ├── bootstrap/              # 离线安装包：构建脚本与安装脚本
+    ├── browser/                # 浏览器控制台脚本：人工提取答案 / 应急作答
     └── cloudflare/             # 安装入口 Worker（固定域名 / 版本解析）
 ```
 
