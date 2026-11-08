@@ -65,6 +65,31 @@ GitHub 访问不稳定时，把地址换成 Gitee 镜像，内容相同：
 uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
+### 版本约定
+
+不加 `@` 时装的是**默认分支最新提交**，适合跟开发。想要可复现的版本就钉标签：
+
+```bash
+uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.0"
+uv tool upgrade elang-reading        # 升到默认分支最新
+uv tool install --force "git+...@v0.1.0"   # 换到指定版本
+```
+
+版本号在四个地方必须一致，发布时由 CI 强制校验：
+
+| 位置 | 例 |
+|---|---|
+| `pyproject.toml` 的 `version` | `0.1.0` |
+| git 标签（前面加 `v`） | `v0.1.0` |
+| wheel 文件名 | `elang_reading-0.1.0-py3-none-any.whl` |
+| 离线包 `VERSION` 与 `/latest.json` 的 `version` | `0.1.0` |
+
+自查当前版本：
+
+```bash
+elang --version        # 或看 elang doctor 输出第一行
+```
+
 **验证**：
 
 ```bash

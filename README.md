@@ -77,6 +77,13 @@ uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 **机器上装不了 uv，或者装的时候连不上网**：改用离线安装包，解压后运行
 `install.cmd`，全程不联网。见 [SETUP.md](SETUP.md) 的"没有 uv 时：离线安装包"。
 
+**钉版本**：不加 `@` 装的是默认分支最新提交；要可复现就指定标签：
+
+```bash
+uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.0"
+elang --version
+```
+
 ### 2. 安装浏览器
 
 `uv tool install` 只建立 Python 环境，不安装浏览器二进制，因此这一步单独执行：

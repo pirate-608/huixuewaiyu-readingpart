@@ -169,6 +169,40 @@ def _redact_credentials(creds):
     }
 
 
+def _version():
+    """The package version, with pyproject.toml as the single source of truth.
+
+    Three sources, in order, because doctor runs in three situations:
+
+    1. installed tool  -> distribution metadata (authoritative)
+    2. `import elang`  -> the module's own `__version__`
+    3. repo checkout   -> parse pyproject.toml (nothing is installed there, and the
+       repo layout does not put `src/` on sys.path)
+
+    scripts/test_version_contract.py keeps 1, 2 and 3 in agreement.
+    """
+    try:
+        from importlib.metadata import version as _dist_version
+        return _dist_version("elang-reading")
+    except Exception:
+        pass
+    try:
+        import elang
+        return str(getattr(elang, "__version__", "unknown"))
+    except Exception:
+        pass
+    try:
+        import tomllib
+        here = Path(__file__).resolve().parent
+        for cand in (here.parent / "pyproject.toml", here / "pyproject.toml"):
+            if cand.is_file():
+                with open(cand, "rb") as f:
+                    return str(tomllib.load(f)["project"]["version"])
+    except Exception:
+        pass
+    return "unknown"
+
+
 def check_source():
     """Where the RUNNING code lives, so a debugging agent can open it.
 
@@ -204,6 +238,7 @@ def main():
     creds = config.load_credentials()
 
     report = {
+        "version": _version(),
         "interpreter": sys.executable,
         "python": sys.version.split()[0],
         "in_venv": sys.prefix != sys.base_prefix,
@@ -220,6 +255,7 @@ def main():
         return 0 if (browser["ok"] and creds["ok"] and not borrowed) else 1
 
     print("=" * 64)
+    print("version     :", report["version"])
     print("interpreter :", sys.executable)
     print("python      :", report["python"], "| in venv:", report["in_venv"])
     src = report["source"]

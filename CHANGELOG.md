@@ -4818,4 +4818,56 @@ Worker 代码改了 `sha256Sums` 的取值方式，**当前线上仍是旧版本
 
 全套 15 个测试脚本 + Worker 自测 21 项通过。
 
+---
+
+## 70. 版本约定：一个版本号，四处对齐
+
+uv 那条路此前没有版本概念：文档只写 `uv tool install git+<repo>`，装的是默认分支
+最新提交，用户无法回报"我在哪个版本"，也无法复现。离线包与 Worker 那边已经有
+版本，两边口径还没统一。
+
+### 约定
+
+| 位置 | 规则 | 例 |
+|---|---|---|
+| `pyproject.toml` 的 `version` | **唯一真源** | `0.1.1` |
+| `src/elang/__init__.py` 的 `__version__` | 必须相等 | `0.1.1` |
+| git 标签 | `v` + 版本 | `v0.1.1` |
+| wheel 文件名 | 由版本生成 | `elang_reading-0.1.1-py3-none-any.whl` |
+| 离线包 `VERSION`、`/latest.json` 的 `version` | 由 wheel 名推导 | `0.1.1` |
+
+### 代码侧
+
+- 新增 `elang --version`（`-V` 同义）：**在分发逻辑之前处理**，因为问版本的人
+  往往正处在出问题的状态；它不 import 任何重依赖。
+- `elang list` 末尾也打印版本。
+- `elang doctor` 增加 `version` 行与 `--json` 的 `version` 字段。取值三层回退：
+  已安装包的 distribution metadata → `elang.__version__` → 直接解析
+  `pyproject.toml`（仓库里未安装时走这条，仍是同一真源）。
+
+### 校验
+
+- 新增 `scripts/test_version_contract.py`（14 项）：pyproject 版本格式、
+  `__init__` 与之一致、`doctor._version()` 一致、`elang --version` 输出正确、
+  CI 守卫仍在、文档仍写着 `@vX.Y.Z` 钉法、`build_bundle.py` 仍从 wheel 名推导版本。
+- `release-bundle.yml` 新增 **tag 守卫**：打标签时先比对
+  `tag == "v" + pyproject version`，以及 `__init__` 与 pyproject 一致，不一致直接
+  失败——避免"标签叫 v1.2.0、包内却是 1.1.0"。本地用同一逻辑双向验证过
+  （匹配放行、不匹配退出 1）。
+
+### 版本提升到 0.1.1
+
+`--version` 是新增能力，而**已发布的 v0.1.0 离线包里没有它**。若源码继续叫
+0.1.0，同一个版本号就会对应两个不同产物——正是这条约定要防的漂移。所以升到
+**0.1.1**（尚未打标签；打 `v0.1.1` 时 CI 会自动出包并附到新 Release，
+Worker 的 `/latest.json` 随之指向它）。
+
+### 文档
+
+`SETUP.md` 增加"版本约定"小节：不写 `@` 装默认分支、钉标签的写法、
+`uv tool upgrade`、四处版本必须一致、用 `elang --version` 自查。
+`README.md` 的安装段落补了钉版本的一行示例。
+
+全套 16 个测试脚本通过（新增 version_contract）。
+
 

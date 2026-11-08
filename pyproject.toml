@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "elang-reading"
-version = "0.1.0"
+version = "0.1.1"
 description = "Playwright automation for 慧学外语 (elang.zju.edu.cn) English reading exercises"
 readme = "README.md"
 requires-python = ">=3.11"

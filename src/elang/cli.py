@@ -12,6 +12,7 @@ batch-all` from an installed tool.
     elang install-skill     register the skill with agent roots
     elang run <args...>     drive the solver (batch-all / batch / solve / ...)
     elang mcp               run the MCP server on stdio
+    elang --version         print the installed version
 """
 import sys
 from pathlib import Path
@@ -69,6 +70,13 @@ def main():
         print(USAGE)
         return 0
 
+    # Version first: it must work even when a later import would fail, because the
+    # usual reason to ask "which version am I on" is that something is broken.
+    if argv[0] in ("-V", "--version", "version"):
+        from elang import __version__
+        print(f"elang {__version__}")
+        return 0
+
     cmd, rest = argv[0], argv[1:]
 
     if cmd in SIMPLE:
@@ -102,6 +110,8 @@ def main():
             print(f"  {name:<15} {desc}")
         print(f"  {'run':<15} drive the solver (batch-all / batch / solve / ...)")
         print(f"  {'mcp':<15} run the MCP server on stdio")
+        from elang import __version__
+        print(f"\nversion: {__version__}")
         print(f"  {'pending':<15} show the article `elang run` is waiting on")
         print(f"  {'answer':<15} answer it, e.g. `elang answer 0=A 1=C`")
         print(f"  {'skip':<15} submit the pending article as-is")
