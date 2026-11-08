@@ -39,7 +39,7 @@ This file provides guidance to coding agents working in this repository.
 > 不加平台分支；代码里已有的 POSIX 分支（`/tmp`、symlink、chmod）保留即可，
 > 不构成承诺，也不要扩展。
 >
-> 改动前先读本文与 [`SECURITY.md`](SECURITY.md)（隐私约定）。
+> 改动前先读本文与 [`SECURITY.md`](SECURITY.md)（凭据与登录态的处理方式、已知风险）。
 > 维护者本地还有一份 `CHANGELOG.md` 记录实测细节与踩过的坑，但它**不入库**
 > （见 `.gitignore`）；新克隆里没有这个文件是正常的。
 
@@ -213,8 +213,9 @@ elang pending / answer / skip / continue / stop   # CLI 回退的答题侧
 `<ipc>` = `$ELANG_TMP_DIR`，否则 `C:/tmp`（Windows）/ `/tmp`（其他）。
 
 保留用途：**验证码交接**（`elang_captcha_request.json` / `elang_captcha.json` /
-`elang_captcha_image.png`）、**会话**（`elang_session.json`）、
-**断点**（`elang_checkpoint.json`）。
+`elang_captcha_image.png`）与**断点**（`elang_checkpoint.json`）。
+**会话不在这里**：它含 token，放在 `~/.elang/session.json`（旧版本遗留的
+`elang_session.json` 只作兼容读取）。
 
 **答案走文件，但只在 CLI 回退路径上。** `elang run` 遇到题库没覆盖的文章时，
 把题目写到 `elang_current.json` 并等待；**答题方是 agent**，用这些命令作答：

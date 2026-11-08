@@ -310,7 +310,7 @@ huixuewaiyu-readingpart/
 ├── SKILL.md                    # skill 契约，三平台共用
 ├── CLAUDE.md                   # 开发指引（Claude Code）
 ├── AGENTS.md                   # 同一份开发指引，供读取 AGENTS.md 的宿主
-├── SECURITY.md                 # 历史重写说明与隐私约定
+├── SECURITY.md                 # 凭据与登录态的存放、读取与已知风险
 ├── .env.example                # 凭据模板
 ├── .mcp.json.example           # MCP 注册模板，实际文件由 setup-mcp 生成
 ├── .githooks/pre-commit        # 提交前隐私检查，需手动启用
@@ -427,7 +427,7 @@ uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 | [`SETUP.md`](SETUP.md) | 安装与配置步骤 |
 | [`CLAUDE.md`](CLAUDE.md) | 架构、依赖方向与开发命令 |
 | [`AGENTS.md`](AGENTS.md) | 同一份开发指引的副本，供读取 AGENTS.md 的宿主 |
-| [`SECURITY.md`](SECURITY.md) | 一次历史重写的说明与隐私约定 |
+| [`SECURITY.md`](SECURITY.md) | 凭据与登录态怎么存、怎么读，以及已知风险 |
 | [`DISTRIBUTION.md`](DISTRIBUTION.md) | 三平台分发与注册方式 |
 
 ## License
