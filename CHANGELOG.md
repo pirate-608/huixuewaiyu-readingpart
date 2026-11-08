@@ -4996,20 +4996,21 @@ Python 3.11+），再给离线包的入口地址与三步操作，不再指向 S
 ### 历史重写
 
 旧账号名还留在 git 历史里（首次配对镜像那次提交的 URL）。改文件不够，于是整仓
-重写了一次：
-
-```bash
-git filter-repo --replace-text temp/replace.txt --replace-message temp/replace.txt --force
-# replace.txt: <redacted>==>pirate-608
-```
+重写了一次：用 `git filter-repo` 的 `--replace-text` 与 `--replace-message`，
+把旧账号名映射成新账号名（替换表里写的是 `旧名==>pirate-608`）。
 
 - 覆盖 **blobs 与提交/标签消息**，75 个提交全部重写，所有 SHA 改变
 - 两个标签（`v0.1.0`、`v0.1.1`）一并重写，指向新提交
-- 重写后 `git log -S'<redacted>' --all` 与 `git grep` 均为 **0 命中**
+- 重写后 `git log -S` 与 `git grep` 在**公开仓库的完整历史里**均为 0 命中
+  （用全新 bare clone 验证，不只看本地）
 - 本地执行 `reflog expire --expire=now --all` + `gc --prune=now`，把旧对象真正删掉
 - 备份留在 `temp/pre-rewrite.bundle`（gitignored），确认无误后可删
 - `filter-repo` 会移除 `origin`，需重新添加；另外仓库里原有一个 `gitee` remote
   也指向旧地址，已删除（镜像由 Actions 负责，本地不需要它）
+
+**教训**：第一版这段说明里直接引用了旧账号名（写"替换表是 X==>pirate-608"），
+结果**把刚刚清掉的值又写回了文档历史**，只能再重写一次。这与 `AGENTS.md` 里
+"隐私清理：描述，不要引用原值"是同一条规则——记录清理过程时也不要写出被清理的值。
 
 **注意**：SHA 全变了，因此 GitHub 上的 `master`、两个标签都是强推覆盖；已存在的
 clone 需要重新克隆（当时确认过没有其他人 clone）。
