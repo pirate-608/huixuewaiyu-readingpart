@@ -1,0 +1,14 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "elang-install"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+
+# 无绑定、无密钥：Worker 只用公开的 GitHub release 信息。
+# 想换仓库或固定版本，取消下面注释：
+# [vars]
+# OWNER_REPO = "pirate-608/huixuewaiyu-readingpart"
+# ASSET_NAME = "elang-bundle-win64.zip"
+# PINNED_TAG = "v0.1.0"
+
+# workers.dev 域名默认可用；要挂自己的域名，用 dashboard 的
+# Settings -> Domains & Routes -> Add custom domain（该域名必须已托管在 Cloudflare）。

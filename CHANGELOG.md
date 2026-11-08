@@ -4709,4 +4709,70 @@ winget install --id=astral-sh.uv -e
 
 全套 15 个测试脚本通过。
 
+---
+
+## 68. 安装入口 Worker（Cloudflare）
+
+给离线包一个固定入口：用户不用记 GitHub 地址，版本解析、下载与安装脚本收敛到一处。
+同样**不影响 uv 分发**——Worker 只读取公开的 Release 信息。
+
+### 路由设计
+
+| 路径 | 行为 |
+|---|---|
+| `/` | 说明页：uv 与离线包两条路 |
+| `/latest.json` | 从最新 Release 取版本、大小、下载地址（**缓存 10 分钟**） |
+| `/elang-bundle-win64.zip` | 默认 **302 跳 Release 资产**；`?stream=1` 由边缘转发 |
+| `/install.ps1`、`/install.cmd` | 按发行标签转发仓库脚本，与包内版本天然一致 |
+| `/healthz` | 探活 |
+
+四个取向值得记下：
+
+- **无绑定、无密钥**。只用公开的 GitHub release 数据，不需要 KV/R2/Secrets。
+- **默认 302 而非代理**。GitHub Releases 自带 CDN 与 Range 支持，让用户直连最省；
+  只有到 GitHub 不通时才用 `?stream=1` 让 Worker 承担流量。
+- **必须缓存**。GitHub 未认证 API 限额 60 次/小时，10 分钟缓存把它压到可忽略。
+- **API 失败不编造数据**：返回 503 并给出 Release 页面兜底地址。
+
+### 本地自测（不需要账号）
+
+`tools/cloudflare/test_worker.mjs`——stub 掉 `fetch` 与 Cache API，覆盖路由、
+缓存命中、302、`?stream=1` 转发、GitHub 403 降级、404/405。**20/20 通过**。
+
+写这组测试时抓到一个真实的实现陷阱：缓存里若直接存 `Response` 对象，第二次
+`match` 再读 body 会抛 `Body is unusable`。真实 Cache API 每次返回新副本，
+所以本地 stub 必须序列化 body 才能如实模拟——否则测试通过而线上行为不同。
+
+测试还明确断言说明页**不含 `irm` 管道式安装**，避免以后被顺手加回去。
+
+### 部署需要授权（本次未部署）
+
+本机没有 wrangler，也没有任何 Cloudflare 凭据，所以部署留给用户选择：
+
+- **A** 提供 API Token（`Workers Scripts:Edit` + `Account Settings:Read`），
+  由我执行 `npx wrangler@4 deploy`
+- **B** 用户自己跑 `npx wrangler@4 login`，再由我部署
+- **C** 纯 Dashboard：Create Worker → 粘贴 `worker.mjs` → Deploy，
+  自定义域名在 Settings → Domains & Routes 添加
+
+三条路径的完整步骤写在 `tools/cloudflare/README.md`。
+
+### 前置条件
+
+`/latest.json` 读的是**最新 Release**，所以第一次用之前仓库要有一个带产物的
+tag（`git tag v0.1.0 && git push origin v0.1.0`）——这会触发
+`release-bundle.yml` 构建并把 zip 附到该 Release。当前仓库还没有任何 tag，
+Worker 部署后会先返回 502/503，属预期。
+
+### 新增文件
+
+| 路径 | 作用 |
+|---|---|
+| `tools/cloudflare/worker.mjs` | Worker 本体（module 语法，无依赖） |
+| `tools/cloudflare/wrangler.toml` | 部署配置（无绑定） |
+| `tools/cloudflare/test_worker.mjs` | 本地自测，20 项 |
+| `tools/cloudflare/README.md` | 部署三选一、自检命令、维护说明 |
+
+全套 15 个测试脚本 + Worker 自测 20 项全部通过。
+
 

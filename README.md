@@ -319,7 +319,9 @@ huixuewaiyu-readingpart/
 │   ├── elang_mcp.py            # MCP server，10 个工具
 │   └── setup.py                # 克隆本仓库后的一键安装
 ├── references/                 # 题库与站点接口说明，answers.json 同时打进 wheel
-└── tools/bootstrap/            # 离线安装包的构建与安装脚本（不随 skill 分发）
+└── tools/                      # 仓库内的辅助工具，不随 skill 分发
+    ├── bootstrap/              # 离线安装包：构建脚本与安装脚本
+    └── cloudflare/             # 安装入口 Worker（固定域名 / 版本解析）
 ```
 
 ### 从源码安装
