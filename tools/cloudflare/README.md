@@ -13,7 +13,13 @@
 | `/latest.json` | 从 GitHub Release 解析版本、大小、下载地址（**缓存 10 分钟**） |
 | `/elang-bundle-win64.zip` | 默认 **302 跳到 Release 资产**；加 `?stream=1` 由边缘转发 |
 | `/install.ps1`、`/install.cmd` | 按发行标签转发仓库里的同名脚本，保证与包内一致 |
+| `/elang-console.js` | 转发 `tools/browser/elang-console.js`，浏览器控制台辅助脚本 |
 | `/healthz` | 探活 |
+
+脚本类路由（`install.*` 与 `elang-console.js`）**先按发行标签取，取不到再退回默认
+分支**，响应头 `x-elang-ref` 标明实际来源。加这条兜底是因为辅助脚本常常晚于最近
+一次发版：`tools/browser/elang-console.js` 就是在 `v0.1.1` 之后才加的，只按标签取
+会 404。
 
 设计取向：
 

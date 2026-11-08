@@ -89,7 +89,9 @@ r = await call("/");
 const page = await r.text();
 check("GET / -> 200 html", r.status === 200 && (r.headers.get("content-type") || "").includes("text/html"));
 check("说明页含两种安装方式", page.includes("uv tool install") && page.includes("install.cmd"));
-check("说明页不含 irm 管道式安装", !page.includes("irm ") && !page.includes("| iex"));
+// Guard the risky shape, not the substring: "confirm dialog" also contains "irm ".
+check("说明页不含 irm 管道式安装",
+  !/\birm\s+https?:/i.test(page) && !page.includes("| iex"));
 
 r = await call("/latest.json");
 const info = await r.json();
@@ -122,6 +124,35 @@ check("GET /install.ps1 -> 200 text", r.status === 200 &&
   (r.headers.get("content-type") || "").includes("text/plain"));
 r = await call("/install.cmd");
 check("GET /install.cmd -> 200", r.status === 200);
+
+console.log("\n=== 控制台脚本 ===");
+r = await call("/elang-console.js");
+check("GET /elang-console.js -> 200 js",
+  r.status === 200 && (r.headers.get("content-type") || "").includes("javascript"),
+  String(r.status));
+check("served from the release tag when available",
+  r.headers.get("x-elang-ref") === "v0.1.0", String(r.headers.get("x-elang-ref")));
+check("/latest.json advertises the console script",
+  (info.consoleScript || "").endsWith("/elang-console.js"), String(info.consoleScript));
+
+// The file was added after the newest release, so at that tag raw returns 404 and
+// the worker must fall back to the default branch instead of failing.
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (input, init) => {
+  const url = typeof input === "string" ? input : input.url;
+  if (url.includes("/tools/browser/elang-console.js")) {
+    if (url.includes("/v0.1.0/")) return new Response("not found", { status: 404 });
+    return new Response("/* console helper */", { status: 200 });
+  }
+  return realFetch(input, init);
+};
+store.clear();
+r = await call("/elang-console.js");
+globalThis.fetch = realFetch;
+check("falls back to master when the tag predates the file", r.status === 200,
+  String(r.status));
+check("the fallback is marked in the response",
+  r.headers.get("x-elang-ref") === "master", String(r.headers.get("x-elang-ref")));
 
 console.log("\n=== 失败分支 ===");
 githubMode = "403";

@@ -306,6 +306,7 @@ blocked=True → OCR attempt 1/3: '9153' → jobs 0->3 → [OK] CAPTCHA solved b
 ### 8.5 浏览器控制台脚本（人工应急）
 
 `tools/browser/elang-console.js` 用于人已经在题目页、不想走 IPC 往返的场景。
+在线地址：<https://elang-install.67656.fun/elang-console.js>。
 粘进 DevTools 控制台后使用：
 
 | 调用 | 作用 |

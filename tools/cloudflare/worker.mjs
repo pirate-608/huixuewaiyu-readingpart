@@ -90,6 +90,9 @@ async function releaseInfo(c, ctx) {
       ps1: `https://raw.githubusercontent.com/${c.repo}/${rel.tag_name}/tools/bootstrap/install.ps1`,
       cmd: `https://raw.githubusercontent.com/${c.repo}/${rel.tag_name}/tools/bootstrap/install.cmd`,
     },
+    // Served by this Worker; falls back to the default branch when the tag
+    // predates the file.
+    consoleScript: "/elang-console.js",
   };
 
   const put = new Response(JSON.stringify(info), {
@@ -137,10 +140,38 @@ Remove it later with <code>install.cmd -Uninstall</code>.</p>
   <li><a href="/elang-bundle-win64.zip">elang-bundle-win64.zip</a> — offline bundle</li>
   <li><a href="/install.ps1">install.ps1</a> — the installer (read it first)</li>
   <li><a href="/install.cmd">install.cmd</a> — wrapper</li>
+  <li><a href="/elang-console.js">elang-console.js</a> — browser console helper</li>
 </ul>
 <p class="muted">Slow connection to GitHub? Append <code>?stream=1</code> to the
 download URL to relay it through this host.</p>
+
+<h2>Already on a question page?</h2>
+<p class="muted">Open <a href="/elang-console.js">elang-console.js</a>, copy all of it,
+paste it into DevTools on the article page, then in the console:</p>
+<pre>elang.status()      // question types, answer-key coverage, read guard
+elang.extract()     // answers only, nothing changes
+elang.answer()      // fill the answers in
+elang.submit()      // open the confirm dialog (does not post)
+elang.submit(true)  // post it</pre>
 `;
+
+// Serve a repo file, preferring the release tag so it matches the published
+// bundle. The tag is not always enough: tools/browser/elang-console.js was added
+// AFTER the newest release, so asking for it at that tag returns 404. Falling back
+// to the default branch keeps such helpers available without waiting for a release.
+async function rawFile(c, tag, path) {
+  const refs = tag ? [tag, "master"] : ["master"];
+  let lastStatus = 0;
+  for (const ref of refs) {
+    const upstream = await fetch(
+      `https://raw.githubusercontent.com/${c.repo}/${ref}/${path}`,
+      { cf: { cacheEverything: true, cacheTtl: 600 },
+        headers: { "user-agent": "elang-install-worker" } });
+    if (upstream.ok) return { res: upstream, ref };
+    lastStatus = upstream.status;
+  }
+  return { res: null, status: lastStatus };
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -206,24 +237,38 @@ export default {
         return json({ error, fallback: `https://github.com/${c.repo}/releases/latest` },
           status === 403 ? 503 : 502);
       }
-      const tag = info.tag;
-      const raw = `https://raw.githubusercontent.com/${c.repo}/${tag}/tools/bootstrap/${file}`;
-      const upstream = await fetch(raw, {
-        cf: { cacheEverything: true, cacheTtl: 600 },
-        headers: { "user-agent": "elang-install-worker" },
-      });
-      if (!upstream.ok) {
-        return json({ error: `raw ${upstream.status} for ${file} at ${tag}` }, 502);
+      const got = await rawFile(c, info.tag, `tools/bootstrap/${file}`);
+      if (!got.res) {
+        return json({ error: `raw ${got.status} for ${file}` }, 502);
       }
-      return new Response(upstream.body, {
+      return new Response(got.res.body, {
         status: 200,
         headers: {
           "content-type": "text/plain; charset=utf-8",
           "cache-control": "public, max-age=300",
+          "x-elang-ref": got.ref,
         },
       });
     }
 
-    return json({ error: "not found", paths: ["/", "/latest.json", "/elang-bundle-win64.zip", "/install.ps1", "/install.cmd", "/healthz"] }, 404);
+    // 浏览器控制台脚本：粘进 DevTools 用。用 text/javascript 便于在浏览器里直接
+    // 打开查看或另存，不做强制附件下载。
+    if (path === "/elang-console.js") {
+      const { info } = await releaseInfo(c, ctx).catch(() => ({ info: {} }));
+      const got = await rawFile(c, info && info.tag, "tools/browser/elang-console.js");
+      if (!got.res) {
+        return json({ error: `console script unavailable (raw ${got.status})` }, 502);
+      }
+      return new Response(got.res.body, {
+        status: 200,
+        headers: {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "public, max-age=300",
+          "x-elang-ref": got.ref,
+        },
+      });
+    }
+
+    return json({ error: "not found", paths: ["/", "/latest.json", "/elang-bundle-win64.zip", "/install.ps1", "/install.cmd", "/elang-console.js", "/healthz"] }, 404);
   },
 };
