@@ -4918,4 +4918,47 @@ Worker 的 `/latest.json` 在缓存过期后自动指向它。
 
 全套 16 个测试脚本 + Worker 自测 21 项通过。
 
+---
+
+## 72. 修正 SETUP.md 的分工：agent 只做两条程序化路径
+
+用户指出：`SETUP.md` 原来把离线安装包写成了 agent 可以执行的第三条路
+（带 `-Target`/`-Check` 参数表、`.\install.cmd` 步骤），这是错的——**手动下载 zip
+并在用户机器上运行安装器，是用户的动作，不是 agent 的步骤**。
+
+### 改后的第 1 步结构
+
+| 小节 | 谁做 | 内容 |
+|---|---|---|
+| **1a. uv**（首选） | agent | 检查 `uv`；缺失时**先问用户**（系统级决定）再给 winget 命令；`uv tool install` 与 Gitee 镜像；版本策略与四处一致表 |
+| **1b. pip + venv**（仅在 uv 不可行时） | agent | `git clone` → `python -m venv .venv` → `.venv\Scripts\python.exe -m pip install .`，得到 venv 内的 `elang` |
+| **两者都不行** | **用户** | 明确写"**不要自己尝试**"，给用户一句可直接复述的话：打开安装入口、下载、解压、运行 `install.cmd`、开新终端 |
+| 可选 OCR | agent | 三种安装方式各自的开启命令 |
+
+### 几个刻意的写法
+
+- 1b 用 **venv 内解释器的绝对路径**调用，不写 `activate`：激活脚本在 cmd 与
+  PowerShell 下不同，写一种就会在另一种环境里失败。
+- 1b 补充"`python` 不在 PATH 时用 `py -3`"，以及"`pip install .` 失败就是原始错误，
+  不要手工拼依赖"。
+- 交给用户的那一节明确禁止两件事：**不要替用户下载或运行**，**不要让用户把命令
+  粘进 agent 驱动的 shell**。用户完成后从第 2 步继续，用 `elang --version` 与
+  `elang list` 验证；失败则只要安装器输出的最后几行。
+- 离线包的参数表（`-Target`/`-Check`/`-Uninstall`/`-NoPath`/`-NoDoctor`）从
+  `SETUP.md` 移除——agent 不该用它们；细节留在 `tools/bootstrap/README.md`，
+  用户看安装入口页面即可。
+
+### README 同步
+
+README 是给人看的，所以把兜底方式直接写成用户可操作的：先给 1b（机器上有
+Python 3.11+），再给离线包的入口地址与三步操作，不再指向 SETUP 里已不存在的
+小节名。顺手把示例版本号从 `v0.1.0` 更新到 `v0.1.1`。
+
+### 测试
+
+`test_docs_match_code` 的 `EXTERNAL_FLAGS` 增加 `upgrade`（文档里出现
+`pip install --upgrade pip`，那是 pip 的参数，不是 elang 的）。
+
+全套 16 个测试脚本 + Worker 自测 21 项通过。
+
 

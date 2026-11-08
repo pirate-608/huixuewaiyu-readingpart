@@ -50,7 +50,20 @@ Needed later for MCP registration. Three possibilities:
 
 ## Step 1: install the tool
 
-Confirm `uv` exists. On Windows it can be installed with winget:
+You have exactly **two** programmatic ways to install it. Try 1a; only if that is
+impossible use 1b. Anything beyond these two is not your job to run — see the last
+subsection for what to hand to the user instead.
+
+### 1a. uv (preferred)
+
+Check whether `uv` exists:
+
+```bash
+uv --version
+```
+
+If it does not, **ask the user first** — installing a system-level tool is their
+decision, not yours. On Windows the command is:
 
 ```powershell
 winget install --id=astral-sh.uv -e
@@ -68,10 +81,9 @@ If GitHub is unreliable, use the Gitee mirror — same content:
 uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
-### Version policy
-
-Without an `@` suffix you get the **latest commit on the default branch**, which
-is fine for tracking development. For a reproducible install, pin a tag:
+**Version policy.** Without an `@` suffix you get the **latest commit on the
+default branch**, which is fine for tracking development. For a reproducible
+install, pin a tag:
 
 ```bash
 uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.1"
@@ -88,13 +100,7 @@ The version must agree in four places; CI enforces this at release time:
 | wheel filename | `elang_reading-0.1.1-py3-none-any.whl` |
 | bundle `VERSION` and `/latest.json` `version` | `0.1.1` |
 
-Check the running version:
-
-```bash
-elang --version        # same value appears on the first line of elang doctor
-```
-
-**Verify:**
+**Verify** (both 1a and 1b):
 
 ```bash
 elang list
@@ -103,57 +109,90 @@ elang list
 It should list `doctor` `init-env` `install-browser` `setup-mcp` `install-skill`
 `run` `mcp`, plus the answering verbs `pending` `answer` `skip` `continue` `stop`.
 
-### No uv available: offline bundle
-
-If `uv` cannot be installed, use the offline bundle. It contains a Python runtime
-and every dependency; **installing requires no network access**.
-
-Download `elang-bundle-win64.zip` from the repository's Releases page, unzip it
-anywhere, then run from that directory:
-
-```powershell
-.\install.cmd                    # installs to %LOCALAPPDATA%\elang
+```bash
+elang --version        # the same value is the first line of elang doctor
 ```
 
-Common options:
+### 1b. pip inside a venv (only when uv is impossible)
 
-| Option | Effect |
-|---|---|
-| `-Target D:\elang` | install somewhere else |
-| `-Check` | report state only, change nothing |
-| `-Uninstall` | remove it (only the PATH entry it added; browser profile and user data are kept) |
-| `-NoPath` | do not touch PATH, call by absolute path |
-| `-NoDoctor` | skip the post-install self check |
+Use this when the machine cannot have `uv` but does have Python 3.11+ and network
+access. Everything stays inside one venv; nothing touches the system interpreter.
 
-It prints the launcher path, by default `%LOCALAPPDATA%\elang\bin\elang.cmd`.
-**Open a new terminal** before `elang` appears on PATH.
+```bash
+git clone https://github.com/pirate-608/huixuewaiyu-readingpart.git
+cd huixuewaiyu-readingpart
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install .
+```
 
-The two install paths do not interfere: the bundle lives in
-`%LOCALAPPDATA%\elang`, the uv copy in `%APPDATA%\uv\tools`, and `-Uninstall`
-never touches the uv one.
+Notes while running this:
+
+- call the venv's python by path, as above, instead of relying on `activate`
+  (the activation script differs between cmd and PowerShell)
+- if `python` is not on PATH, use `py -3` instead — the project needs 3.11+
+- if `pip install .` fails, that is the raw error to report; do not hand-assemble
+  packages
+
+`pip install .` builds and installs the same wheel `uv` would have installed, so
+the `elang` command exists **inside that venv** (`.venv\Scripts\elang.exe`). Either
+activate the venv in every later step, or call that absolute path. Every `elang`
+command in this guide works the same way.
+
+Differences from 1a worth knowing while troubleshooting:
+
+- the install lives in the repo's `.venv`, so deleting the checkout uninstalls it
+- `elang --version` still works, and `elang doctor` reports
+  `source ... (installed)` with the venv path — that is expected
+- re-running `pip install .` is the upgrade path (there is no `uv tool upgrade`)
+
+### If neither 1a nor 1b works: hand it to the user
+
+There is a third installation method — an **offline bundle** with a bundled Python
+runtime and all dependencies. **You must not attempt it yourself**: it needs a
+manual download and running an installer on the user's machine, which is the
+user's action, not an agent step.
+
+Tell the user, word for word is fine:
+
+> Open **https://elang-install.67656.fun/** , download `elang-bundle-win64.zip`
+> (about 66 MB), unzip it anywhere, then run `install.cmd` in that folder.
+> It installs to `%LOCALAPPDATA%\elang` without using the network.
+> After it finishes, **open a new terminal** and tell me.
+
+Do not try to download or run it for them, and do not ask them to paste commands
+into a shell you drive. While they do it, explain what they will see: the
+installer verifies checksums, extracts the runtime, installs the wheels, writes a
+launcher, and prints the launcher path.
+
+Once the user confirms, continue at step 2 and verify:
+
+```bash
+elang --version
+elang list
+```
+
+If they report a failure, ask for the **last few lines of the installer output**
+and treat that as the raw error — do not retry the install yourself.
 
 ### Optional: captcha OCR (off by default)
 
-`ddddocr` is an **optional dependency**; `uv tool install` does not install it.
-That is intentional: it drags in onnxruntime + opencv and is large, so
-`elang doctor` reporting `ddddocr MISSING` is normal.
+`ddddocr` is an **optional dependency**; neither `uv tool install` nor
+`pip install .` installs it. That is intentional: it drags in onnxruntime +
+opencv and is large, so `elang doctor` reporting `ddddocr MISSING` is normal.
 
-Install it to get automatic recognition:
+To enable automatic recognition:
 
-```bash
-uv tool install --with ddddocr --with Pillow git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
-```
+- with uv: `uv tool install --with ddddocr --with Pillow git+https://github.com/pirate-608/huixuewaiyu-readingpart.git`
+- with 1b: `.venv\Scripts\python.exe -m pip install ddddocr Pillow`
+- with the offline bundle: the bundle does not contain it; use one of the two
+  above, or skip OCR
 
 Without it the tool still works; a captcha is handed to a vision model or solved
 by hand (see stage 3 of `SKILL.md`). **Key precondition**: the hand-off requires
 an agent that can actually read images. If yours cannot, set
 `ELANG_CAPTCHA_MANUAL=1` so the user types the code, otherwise that article waits
 the full 600 seconds for nothing.
-
-**If `uv` is missing**: say so and **do not install it yourself** (that is a
-system-level decision). Alternative: `git clone`, then create a venv
-(`python -m venv .venv`, `pip install -r requirements.txt` inside it) and run
-`scripts/elang_reader.py` from the checkout.
 
 ---
 

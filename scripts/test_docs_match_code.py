@@ -26,6 +26,7 @@ EXTERNAL_FLAGS = {
     "all", "hard",            # git filter-repo
     "force-with-lease",       # git push
     "with",                   # uv tool install --with (optional extras, e.g. ddddocr)
+    "upgrade",                # pip install --upgrade pip
     "shared",                 # elang install-browser (present but checked below)
 }
 

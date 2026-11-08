@@ -74,13 +74,18 @@ uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
-**机器上装不了 uv，或者装的时候连不上网**：改用离线安装包，解压后运行
-`install.cmd`，全程不联网。见 [SETUP.md](SETUP.md) 的"没有 uv 时：离线安装包"。
+**装不了 uv，但机器上有 Python 3.11+**：`git clone` 后在仓库里建 venv、`pip install .`，
+同样能得到 `elang` 命令。步骤见 [SETUP.md](SETUP.md) 的 1b。
+
+**两者都不行（没有管理员权限、装不上工具、或安装时连不上网）**：用离线安装包。
+打开 **<https://elang-install.67656.fun/>**，下载 `elang-bundle-win64.zip`（约 66 MB），
+解压后运行里面的 `install.cmd` —— 全程不联网，装到 `%LOCALAPPDATA%\elang`。
+装完需要重开一个终端。
 
 **钉版本**：不加 `@` 装的是默认分支最新提交；要可复现就指定标签：
 
 ```bash
-uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.0"
+uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.1"
 elang --version
 ```
 
