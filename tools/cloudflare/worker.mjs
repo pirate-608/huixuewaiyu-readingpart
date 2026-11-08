@@ -100,44 +100,46 @@ async function releaseInfo(c, ctx) {
 }
 
 const PAGE = (host) => `<!doctype html>
-<html lang="zh-CN"><meta charset="utf-8">
+<html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>elang 安装</title>
+<title>elang — install</title>
 <style>
-  body{font:16px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:44rem;margin:3rem auto;padding:0 1.2rem;color:#1b1f24}
+  body{font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:42rem;margin:3rem auto;padding:0 1.2rem;color:#1b1f24}
   code,pre{font-family:ui-monospace,Consolas,monospace;background:#f4f5f7;border-radius:6px}
   code{padding:.12em .38em}
-  pre{padding:.9rem 1rem;overflow:auto}
-  h1{font-size:1.6rem;margin-bottom:.4rem}
-  h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #e6e8eb;padding-bottom:.3rem}
+  pre{padding:.85rem 1rem;overflow:auto;font-size:.92rem}
+  h1{font-size:1.55rem;margin-bottom:.3rem}
+  h2{font-size:1.05rem;margin-top:2.2rem;text-transform:uppercase;letter-spacing:.04em;color:#48525c}
   .muted{color:#5b6570;font-size:.92rem}
-  table{border-collapse:collapse;width:100%;font-size:.95rem}
-  td,th{border-bottom:1px solid #e6e8eb;padding:.45rem .3rem;text-align:left}
+  ul{padding-left:1.2rem}
 </style>
-<h1>elang 安装入口</h1>
-<p class="muted">慧学外语阅读练习工具。两种安装方式，任选其一。</p>
+<h1>elang</h1>
+<p class="muted">Reading-practice automation for ZJU 慧学外语. Windows 10/11 x64.</p>
 
-<h2>方式一：已有 uv（推荐）</h2>
+<h2>Option 1 — with uv</h2>
 <pre>winget install --id=astral-sh.uv -e
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git</pre>
+<p class="muted">Pin a release: append <code>@v0.1.1</code>. Check: <code>elang --version</code>.</p>
 
-<h2>方式二：没有 uv / 装的时候连不上网</h2>
-<p>下载离线包，解压后在该目录运行 <code>install.cmd</code>。安装过程不联网。</p>
-<pre># 直接下载
-${host}/elang-bundle-win64.zip
+<h2>Option 2 — without uv (offline)</h2>
+<ol>
+  <li>Download <a href="/elang-bundle-win64.zip">elang-bundle-win64.zip</a> (about 66 MB).</li>
+  <li>Unzip anywhere.</li>
+  <li>Run <code>install.cmd</code> in that folder.</li>
+</ol>
+<p class="muted">No network is used during install. The tool goes to
+<code>%LOCALAPPDATA%\\elang</code>; open a new terminal afterwards.
+Remove it later with <code>install.cmd -Uninstall</code>.</p>
 
-# 或先看版本与大小
-${host}/latest.json</pre>
-<table>
-<tr><th>文件</th><th>用途</th></tr>
-<tr><td><a href="/elang-bundle-win64.zip">elang-bundle-win64.zip</a></td><td>离线安装包（约 72 MB）</td></tr>
-<tr><td><a href="/latest.json">latest.json</a></td><td>当前版本、大小、下载地址</td></tr>
-<tr><td><a href="/install.ps1">install.ps1</a></td><td>安装脚本（可先自己看一遍）</td></tr>
-<tr><td><a href="/install.cmd">install.cmd</a></td><td>双击运行的包装</td></tr>
-</table>
-<p class="muted">安装会把工具放进 <code>%LOCALAPPDATA%\\elang</code>，不改动系统 Python，
-卸载用 <code>install.cmd -Uninstall</code>。装完需要重开一个终端。</p>
-<p class="muted">如果到 GitHub 的连接不稳，给下载地址加 <code>?stream=1</code>，由本入口中转。</p>
+<h2>Files</h2>
+<ul>
+  <li><a href="/latest.json">latest.json</a> — version, size, download URL</li>
+  <li><a href="/elang-bundle-win64.zip">elang-bundle-win64.zip</a> — offline bundle</li>
+  <li><a href="/install.ps1">install.ps1</a> — the installer (read it first)</li>
+  <li><a href="/install.cmd">install.cmd</a> — wrapper</li>
+</ul>
+<p class="muted">Slow connection to GitHub? Append <code>?stream=1</code> to the
+download URL to relay it through this host.</p>
 `;
 
 export default {

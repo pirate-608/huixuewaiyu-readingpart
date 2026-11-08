@@ -1,311 +1,329 @@
-# 安装与配置指引（给 agent 读）
+# Install & configuration guide (for the agent)
 
-> **读者：执行 agent**（安装 / 配置本工具）。开发 agent 看 `CLAUDE.md`。
-> 第 0 步先确认你在哪个宿主（DSH / Codex / Claude Code）。
+> **Audience: the execution agent** (installs / configures this tool). Developers
+> see `CLAUDE.md`. Step 0 decides which host you are in (DSH / Codex / Claude Code).
 
+You are helping the user install and configure **huixuewaiyu-readingpart**, an
+automation tool for ZJU 慧学外语 reading exercises.
 
-你正在帮用户安装配置 **huixuewaiyu-readingpart**（慧学外语阅读自动答题工具）。
+**Supported scope: Windows 10/11 (64-bit).** Other platforms are out of scope —
+tell the user instead of attempting a port.
 
-**支持范围：Windows 10/11（64 位）。** 其他平台不在支持范围，遇到非 Windows
-环境直接告诉用户，不要尝试移植。
-
-**请严格按顺序执行，每步验证通过再进入下一步。**
-遇到失败：把**原始错误**报告给用户，不要跳过、不要假装成功。
-
----
-
-## 背景：这是什么，由什么组成
-
-三个独立产物，边界清楚：
-
-| 产物 | 装法 | 职责 |
-|---|---|---|
-| **工具** | `uv tool install` | MCP server + 求解器。自带隔离环境，提供 `elang` 命令 |
-| **skill** | `elang install-skill` | 文档与契约，告诉 agent 该跑什么命令 |
-| **本仓库** | `git clone` | 承载两者；开发用 |
-
-工具的依赖在 uv 自己的环境里，**不碰用户的系统 Python**。
-
-**你的角色**：跑确定性命令、判断环境、处理失败重试、问用户偏好。
-**不要**手写配置文件，改用 `elang setup-mcp`，它会备份、校验并在失败时回滚。
+**Run the steps in order and verify each one before moving on.** On failure,
+report the **raw error** to the user. Do not skip a step and do not pretend it
+succeeded.
 
 ---
 
-## 第 0 步：确认你在哪个 agent 里
+## Background: what this is
 
-后面注册 MCP 要用。三种可能：
+Three separate artifacts with clear boundaries:
 
-| agent | MCP 注册位置 | 格式 |
+| Artifact | Installed by | Responsibility |
 |---|---|---|
-| **Claude Code** | `<项目>/.mcp.json` | JSON |
+| **tool** | `uv tool install` | MCP server + solver. Isolated env, provides the `elang` command |
+| **skill** | `elang install-skill` | Docs and the contract telling an agent what to run |
+| **this repo** | `git clone` | Holds both; used for development |
+
+The tool's dependencies live inside uv's own environment and **never touch the
+user's system Python**.
+
+**Your role**: run deterministic commands, judge the environment, handle retries,
+ask the user for preferences. **Do not** hand-write config files — use
+`elang setup-mcp`, which backs up, edits, verifies and rolls back on failure.
+
+---
+
+## Step 0: identify the host agent
+
+Needed later for MCP registration. Three possibilities:
+
+| agent | MCP registration location | Format |
+|---|---|---|
+| **Claude Code** | `<project>/.mcp.json` | JSON |
 | **DSH** | `~/.dsh/profiles/<profile>/cordis.patch.yml` | YAML |
 | **Codex** | `~/.codex/config.toml` | TOML |
 
-**如果不确定，直接询问用户。** 不要猜测，猜错会写入错误的文件。
+**If unsure, ask the user.** Do not guess: guessing writes to the wrong file.
 
 ---
 
-## 第 1 步：装工具
+## Step 1: install the tool
 
-先确认机器上已有 `uv`。Windows 上可以用 winget 安装：
+Confirm `uv` exists. On Windows it can be installed with winget:
 
 ```powershell
 winget install --id=astral-sh.uv -e
 ```
 
-然后安装工具：
+Then install the tool:
 
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
-GitHub 访问不稳定时，把地址换成 Gitee 镜像，内容相同：
+If GitHub is unreliable, use the Gitee mirror — same content:
 
 ```bash
 uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
-### 版本约定
+### Version policy
 
-不加 `@` 时装的是**默认分支最新提交**，适合跟开发。想要可复现的版本就钉标签：
+Without an `@` suffix you get the **latest commit on the default branch**, which
+is fine for tracking development. For a reproducible install, pin a tag:
 
 ```bash
-uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.0"
-uv tool upgrade elang-reading        # 升到默认分支最新
-uv tool install --force "git+...@v0.1.0"   # 换到指定版本
+uv tool install "git+https://github.com/pirate-608/huixuewaiyu-readingpart.git@v0.1.1"
+uv tool upgrade elang-reading                 # move to the default branch head
+uv tool install --force "git+...@v0.1.1"      # switch to a specific version
 ```
 
-版本号在四个地方必须一致，发布时由 CI 强制校验：
+The version must agree in four places; CI enforces this at release time:
 
-| 位置 | 例 |
+| Location | Example |
 |---|---|
-| `pyproject.toml` 的 `version` | `0.1.0` |
-| git 标签（前面加 `v`） | `v0.1.0` |
-| wheel 文件名 | `elang_reading-0.1.0-py3-none-any.whl` |
-| 离线包 `VERSION` 与 `/latest.json` 的 `version` | `0.1.0` |
+| `pyproject.toml` `version` | `0.1.1` |
+| git tag (with a `v` prefix) | `v0.1.1` |
+| wheel filename | `elang_reading-0.1.1-py3-none-any.whl` |
+| bundle `VERSION` and `/latest.json` `version` | `0.1.1` |
 
-自查当前版本：
+Check the running version:
 
 ```bash
-elang --version        # 或看 elang doctor 输出第一行
+elang --version        # same value appears on the first line of elang doctor
 ```
 
-**验证**：
+**Verify:**
 
 ```bash
 elang list
 ```
 
-应列出：`doctor` `init-env` `install-browser` `setup-mcp` `install-skill` `run` `mcp`，以及答题侧动词 `pending` `answer` `skip` `continue` `stop`
+It should list `doctor` `init-env` `install-browser` `setup-mcp` `install-skill`
+`run` `mcp`, plus the answering verbs `pending` `answer` `skip` `continue` `stop`.
 
-### 没有 uv 时：离线安装包
+### No uv available: offline bundle
 
-机器上装不了 uv 时，
-改用离线包。包里有 Python 运行时和全部依赖，**安装过程不需要联网**。
+If `uv` cannot be installed, use the offline bundle. It contains a Python runtime
+and every dependency; **installing requires no network access**.
 
-从仓库的 Releases 页面下载 `elang-bundle-win64.zip`，解压到任意目录，然后在
-该目录里执行：
+Download `elang-bundle-win64.zip` from the repository's Releases page, unzip it
+anywhere, then run from that directory:
 
 ```powershell
-.\install.cmd                    # 装到 %LOCALAPPDATA%\elang
+.\install.cmd                    # installs to %LOCALAPPDATA%\elang
 ```
 
-常用参数：
+Common options:
 
-| 参数 | 作用 |
+| Option | Effect |
 |---|---|
-| `-Target D:\elang` | 换安装位置 |
-| `-Check` | 只报告状态，不改动 |
-| `-Uninstall` | 卸载（只删自己加的 PATH 项，保留浏览器 profile 等用户数据） |
-| `-NoPath` | 不改 PATH，用绝对路径调用 |
-| `-NoDoctor` | 跳过安装后的自检 |
+| `-Target D:\elang` | install somewhere else |
+| `-Check` | report state only, change nothing |
+| `-Uninstall` | remove it (only the PATH entry it added; browser profile and user data are kept) |
+| `-NoPath` | do not touch PATH, call by absolute path |
+| `-NoDoctor` | skip the post-install self check |
 
-装完会打印启动器路径，默认 `%LOCALAPPDATA%\elang\bin\elang.cmd`。
-**打开一个新终端**后 `elang` 才会出现在 PATH 里。
+It prints the launcher path, by default `%LOCALAPPDATA%\elang\bin\elang.cmd`.
+**Open a new terminal** before `elang` appears on PATH.
 
-两条安装路径互不干扰：离线包装在 `%LOCALAPPDATA%\elang`，uv 装的那份在
-`%APPDATA%\uv\tools`，`-Uninstall` 不会碰 uv 那份。
+The two install paths do not interfere: the bundle lives in
+`%LOCALAPPDATA%\elang`, the uv copy in `%APPDATA%\uv\tools`, and `-Uninstall`
+never touches the uv one.
 
-### 可选：验证码 OCR（默认不装）
+### Optional: captcha OCR (off by default)
 
-`ddddocr` 是**可选依赖**，`uv tool install` 不会装它。这不是装漏了：
-它带 onnxruntime + opencv，体积大，而 `elang doctor` 报 `ddddocr MISSING`
-仍属正常。
+`ddddocr` is an **optional dependency**; `uv tool install` does not install it.
+That is intentional: it drags in onnxruntime + opencv and is large, so
+`elang doctor` reporting `ddddocr MISSING` is normal.
 
-装它才有自动识别：
+Install it to get automatic recognition:
 
 ```bash
 uv tool install --with ddddocr --with Pillow git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
 
-不装也能用，只是验证码要交给视觉模型或人工（见 `SKILL.md` 阶段三）。
-**关键前提**：交给视觉模型要求运行它的 agent 真的能读图；读不了图时应当
-设 `ELANG_CAPTCHA_MANUAL=1`，让用户自己输，否则那一篇会白等 600 秒。
+Without it the tool still works; a captcha is handed to a vision model or solved
+by hand (see stage 3 of `SKILL.md`). **Key precondition**: the hand-off requires
+an agent that can actually read images. If yours cannot, set
+`ELANG_CAPTCHA_MANUAL=1` so the user types the code, otherwise that article waits
+the full 600 seconds for nothing.
 
-**若 `uv` 不存在**：告诉用户，**不要擅自安装**（那是系统级决定）。
-替代方案：`git clone` 后自建 venv（`python -m venv .venv`，
-在 venv 里 `pip install -r requirements.txt`），从仓库运行 `scripts/elang_reader.py`。
+**If `uv` is missing**: say so and **do not install it yourself** (that is a
+system-level decision). Alternative: `git clone`, then create a venv
+(`python -m venv .venv`, `pip install -r requirements.txt` inside it) and run
+`scripts/elang_reader.py` from the checkout.
 
 ---
 
-## 第 2 步：装浏览器
+## Step 2: install a browser
 
 ```bash
 elang install-browser
 ```
 
-**验证**：
+**Verify:**
 
 ```bash
 elang doctor
 ```
 
-`browser` 一节应显示 `launch: ok`。
+The `browser` section should show `launch: ok`.
 
-**说明**：
+**Notes:**
 
-- 顺序是"先复用、再下载"：已有 Chromium 构建则什么都不做；没有构建但装了
-  Chrome / Edge 则直接复用，**不联网也不下载**；两者都没有时才下载约 680MB
-- 强制安装自带构建用 `--bundled`；装到 Playwright 共享缓存用 `--shared`
-- 需要下载时，报**网络/TLS 错误**是常见的瞬时问题 → **直接重试**即可（会续传）
+- Reuse first, download second: an existing Chromium build means nothing to do;
+  otherwise an installed Chrome / Edge is reused with **no network and no
+  download**; only when neither exists does it download ~680 MB
+- `--bundled` forces the bundled build; `--shared` installs into Playwright's
+  shared cache
+- When a download is needed, a **network/TLS error** is usually transient →
+  **just retry** (it resumes)
 
 ---
 
-## 第 3 步：配置凭据（需要用户参与）
+## Step 3: configure credentials (needs the user)
 
 ```bash
-elang init-env          # 在工作区根生成 .env 模板
+elang init-env          # writes a .env template in the workspace root
 ```
 
-然后**请用户自己**把学号和密码填进生成的 `.env`。
+Then ask **the user** to fill their student ID and password into that `.env`.
 
-> **不要读取、回显、记录或转述密码内容。**
-> 也不要让用户把密码发在对话里。
+> **Never read, echo, log or relay the password**, and do not ask the user to
+> paste it into the conversation.
 
-**验证**：
+**Verify:**
 
 ```bash
 elang doctor
 ```
 
-`credentials` 一节应显示 `username: set` 与 `password: set`。
+The `credentials` section should show `username: set` and `password: set`.
 
-**凭据解析顺序**（供你排查）：
+**Credential resolution order** (for troubleshooting):
 
 ```
-1. $ELANG_ENV_FILE                     显式指定
-2. <工作目录>/.env                      工作区根 ← 约定
-3. ~/.elang/.env                       兜底
+1. $ELANG_ENV_FILE                     explicit
+2. <working dir>/.env                  workspace root  <- the convention
+3. ~/.elang/.env                       fallback
 
-键名两套都认（带 ELANG_ 前缀的优先）：
+Both key spellings are accepted (the ELANG_ prefixed one wins):
     ELANG_CAS_USERNAME  /  CAS_USERNAME
     ELANG_CAS_PASSWORD  /  CAS_PASSWORD
-真实环境变量优先于以上任何文件，两套键名都适用。
+Real environment variables override every file above, for both spellings.
 ```
 
-`doctor` 会显示**实际读取的文件**和每个值的来源。若显示 `fallback` 而不是
-`workspace`，说明用户不在项目根启动。
+`doctor` shows **which file was actually read** and where each value came from. If
+it says `fallback` instead of `workspace`, the user did not start in the project
+root.
 
 ---
 
-## 第 4 步：注册 skill
+## Step 4: register the skill
 
-**先问用户**：全局装（所有项目可用）还是只装当前项目？
+**Ask the user first**: global (all projects) or this project only?
 
 ```bash
-elang install-skill --agent <第0步确认的 agent> --scope <global|project>
+elang install-skill --agent <agent from step 0> --scope <global|project>
 ```
 
-**验证**：
+**Verify:**
 
 ```bash
 elang install-skill --agent <agent> --scope <scope> --check
 ```
 
-应显示 `present`。
+It should report `present`.
 
-**说明**：
+**Notes:**
 
-- **DSH 与 Codex 共享 `~/.agents/skills`**，给两者安装只写一个目录
-- `project` 装到项目内，**优先级高于全局**，且可随项目提交给协作者
+- **DSH and Codex share `~/.agents/skills`**, so installing for both writes one
+  directory
+- `project` installs inside the project, **takes precedence over global**, and can
+  be committed so collaborators get it
 
 ---
 
-## 第 5 步：注册 MCP
+## Step 5: register MCP
 
 ```bash
-elang setup-mcp --host <第0步确认的 agent>
+elang setup-mcp --host <agent from step 0>
 ```
 
-**先看将写入什么**（可选，推荐首次使用）：
+**Preview the change first** (optional, recommended the first time):
 
 ```bash
 elang setup-mcp --host <agent> --dry-run
 ```
 
-**安全保证**：脚本会先备份、用解析器结构化修改、写完**重新解析校验**，
-失败自动回滚。它**只打印新增的行**，绝不整体回显配置
-（`~/.codex/config.toml` 里可能有 API key 明文）。
+**Safety guarantee**: the script backs up, edits structurally with a parser,
+re-parses to verify, and rolls back on failure. It **prints only the lines it
+adds** and never echoes the whole file (`~/.codex/config.toml` may hold plaintext
+API keys).
 
-**验证**：脚本自己会校验。成功后需要**重启/刷新 agent**：
+**Verify**: the script verifies itself. Afterwards the agent must be restarted:
 
-| agent | 需要做什么 |
+| agent | What is needed |
 |---|---|
-| Claude Code | 重启，或重新加载项目 |
-| DSH | **重启 DSH**（profile 会重新组合） |
-| Codex | 重启 Codex |
+| Claude Code | restart, or reload the project |
+| DSH | **restart DSH** (the profile is recomposed) |
+| Codex | restart Codex |
 
 ---
 
-## 第 6 步：汇报
+## Step 6: report back
 
-告诉用户：
+Tell the user:
 
-1. 工具版本与路径
-2. 浏览器状态
-3. 凭据状态（只报 `set` / `missing`，**不报内容**）
-4. skill 装在哪
-5. MCP 是否注册成功
-6. **还需要用户做什么**（通常是：重启 agent）
-
----
-
-## ⚠️ 重要：MCP server 必须在文件沙箱外运行
-
-已实测：**Playwright 无法在受限文件沙箱内启动浏览器**。
-
-- 它的 driver 走 `asyncio.create_subprocess_exec`，在 Windows 上需要**命名**管道
-- 受限沙箱拒绝 `CreateFile("\\.\pipe\...")`，报 `WinError 5`
-- 同步 API 也一样（内部就是 asyncio）
-
-**DSH 的 `failOnStartupError: true` 就是为了让这类失败显式暴露**，
-而不是静默地"工具没出现"。
-
-若注册后 `elang_status` 就报错 → server 没连上（查路径/配置）。
-若 `elang_status` 正常但 `elang_start` 失败 → 浏览器起不来（多半是沙箱）。
+1. the tool version and path
+2. browser status
+3. credential status (only `set` / `missing`, **never the value**)
+4. where the skill was installed
+5. whether MCP registration succeeded
+6. **what the user still has to do** (usually: restart the agent)
 
 ---
 
-## 排查表
+## Important: the MCP server must run outside the file sandbox
 
-| 现象 | 原因 | 处理 |
+Measured: **Playwright cannot start a browser inside a restricted file sandbox.**
+
+- its driver goes through `asyncio.create_subprocess_exec`, which needs a
+  **named** pipe on Windows
+- the sandbox refuses `CreateFile("\\.\pipe\...")` with `WinError 5`
+- the sync API behaves the same, because it is asyncio underneath
+
+**DSH's `failOnStartupError: true` exists so this kind of failure is visible**,
+instead of a silently missing tool.
+
+If `elang_status` errors right after registration → the server never connected
+(check the path / config format). If `elang_status` works but `elang_start` fails
+→ the browser could not start (usually the sandbox).
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Action |
 |---|---|---|
-| `elang: command not found` | 工具没装或不在 PATH | 重跑 `uv tool install`；提示用户重开终端 |
-| `elang doctor` 报 `EPERM`/`mkdtemp` | 临时目录不可写 | 把 `TEMP`/`TMP` 指向可写目录 |
-| `browser launch: FAILED` | 没有可用浏览器 | `elang install-browser`（会先复用已装 Chrome/Edge；需要下载时报网络错误就重试） |
-| `credentials ... (missing)` | 没有 `.env` | `elang init-env`，让用户填 |
-| `WARNING: ... OUTSIDE this interpreter's tree` | 依赖是借来的 | 重建隔离环境（`uv tool install`） |
-| MCP 注册后看不到工具 | agent 没重启 | 重启它 |
-| `elang_status` 报错 | server 没连上 | 检查 `command` 路径与配置格式 |
-| `elang_start` 失败但 `status` 正常 | 浏览器/沙箱问题 | 见上面的沙箱说明 |
-| 登录页打不开或登录失败 | 代理/TUN 与站点网络限制冲突 | 关闭 TUN 与全局代理，或让 `elang.zju.edu.cn`、`zjuam.zju.edu.cn` 直连 |
+| `elang: command not found` | not installed, or not on PATH | rerun `uv tool install`; tell the user to reopen the terminal |
+| `elang doctor` reports `EPERM`/`mkdtemp` | temp directory not writable | point `TEMP`/`TMP` at a writable directory |
+| `browser launch: FAILED` | no usable browser | `elang install-browser` (reuses installed Chrome/Edge first; retry on network errors) |
+| `credentials ... (missing)` | no `.env` | `elang init-env`, let the user fill it |
+| `WARNING: ... OUTSIDE this interpreter's tree` | borrowed dependencies | rebuild the isolated env (`uv tool install`) |
+| MCP tools missing after registration | agent not restarted | restart it |
+| `elang_status` errors | server not connected | check the `command` path and config format |
+| `elang_start` fails, `status` is fine | browser / sandbox problem | see the sandbox note above |
+| login page unreachable or login fails | proxy/TUN conflicts with the site's network restrictions | turn off TUN and the global proxy, or let `elang.zju.edu.cn` and `zjuam.zju.edu.cn` connect directly |
 
 ---
 
-## 不要做的事
+## Do not
 
-- **不要**手写/手改 agent 的配置文件（用 `elang setup-mcp`）
-- **不要**读取或转述用户的密码
-- **不要**擅自安装 `uv`（先问）
-- **不要**猜 scope（问用户）
-- **不要**为了"看起来成功"而吞掉错误
+- **Do not** hand-write or hand-edit an agent's config file (use `elang setup-mcp`)
+- **Do not** read or relay the user's password
+- **Do not** install `uv` on your own (ask first)
+- **Do not** guess the scope (ask the user)
+- **Do not** swallow an error to look successful

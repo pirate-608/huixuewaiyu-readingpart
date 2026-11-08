@@ -65,27 +65,41 @@ check("share/ matches the payload",
       set(share) == payload_srcs, f"share={sorted(share)} payload={sorted(payload_srcs)}")
 
 print("\n=== role-specific docs declare their audience ===")
-# A 读者 banner belongs on the documents whose audience could be confused: the two
+# A banner belongs on the documents whose audience could be confused: the two
 # skill-facing docs and the development-only ones. README is a general entry point
 # and .env.example is a template, so neither carries one.
+#
+# The banner may be Chinese or English: SETUP.md is written in English because the
+# agent that runs it is the primary reader, while the development docs stay
+# Chinese. The rule being enforced is "the audience is stated", not the language.
+BANNER_WORDS = ("读者", "Audience")
+EXEC_ROLE_WORDS = ("执行 agent", "execution agent")
+DEV_ROLE_WORDS = ("开发 agent", "development agent")
 BANNERED = ({"SKILL.md", "SETUP.md"} | DEV_DOCS)
+
+
+def head_of(name):
+    return "\n".join((REPO / name).read_text(encoding="utf-8").splitlines()[:12])
+
+
 for name in sorted(BANNERED):
-    p = REPO / name
-    if not p.exists():
+    if not (REPO / name).exists():
         check(f"{name} exists", False)
         continue
-    head = "\n".join(p.read_text(encoding="utf-8").splitlines()[:12])
-    check(f"{name} declares its audience", "读者" in head)
+    head = head_of(name)
+    check(f"{name} declares its audience", any(w in head for w in BANNER_WORDS))
 
 print("\n=== banners point at the right role ===")
 for name in sorted({"SKILL.md", "SETUP.md"}):
-    head = "\n".join((REPO / name).read_text(encoding="utf-8").splitlines()[:12])
-    check(f"{name} says 执行 agent", "执行 agent" in head,
-          "found: " + next((l for l in head.splitlines() if "读者" in l), "?"))
+    head = head_of(name)
+    check(f"{name} names the execution agent", any(w in head for w in EXEC_ROLE_WORDS),
+          "found: " + next((l for l in head.splitlines()
+                            if any(w in l for w in BANNER_WORDS)), "?"))
 for name in sorted(DEV_DOCS):
-    head = "\n".join((REPO / name).read_text(encoding="utf-8").splitlines()[:12])
-    check(f"{name} says 开发 agent", "开发 agent" in head,
-          "found: " + next((l for l in head.splitlines() if "读者" in l), "?"))
+    head = head_of(name)
+    check(f"{name} names the development agent", any(w in head for w in DEV_ROLE_WORDS),
+          "found: " + next((l for l in head.splitlines()
+                            if any(w in l for w in BANNER_WORDS)), "?"))
 
 print("\n=== README stays a general entry point ===")
 readme = (REPO / "README.md").read_text(encoding="utf-8")

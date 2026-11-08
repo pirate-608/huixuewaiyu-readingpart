@@ -4870,4 +4870,52 @@ Worker 的 `/latest.json` 随之指向它）。
 
 全套 16 个测试脚本通过（新增 version_contract）。
 
+---
+
+## 71. SETUP.md 与安装页改为英文
+
+### 为什么改
+
+`SETUP.md` 的读者是**执行 agent**（落地安装的那一方），而它的上游契约
+（`SKILL.md`）与仓库开发文档是中文。这次按用户要求把面向安装的两处改成英文：
+`SETUP.md` 与 Worker 的安装页。开发文档（`CLAUDE.md`、`AGENTS.md`、
+`CHANGELOG.md`）保持中文。
+
+### SETUP.md
+
+全文重写为英文，结构与信息量不变：
+
+- 三个产物的边界表、第 0 步识别宿主、第 1～6 步、沙箱说明、排查表、"不要做的事"
+- 版本策略小节同步到 **0.1.1**（四处必须一致的表格、`@v0.1.1` 钉法、`elang --version`）
+- 离线安装包小节保留参数表与"两条路径互不干扰"的说明
+- 密码处理、`setup-mcp` 的安全保证、凭据解析顺序等原文照转，不缩减
+
+### Worker 安装页
+
+`tools/cloudflare/worker.mjs` 的 `PAGE` 改为**简洁英文**：两个选项（有 uv / 无 uv）、
+文件列表、`?stream=1` 提示。去掉了中文说明和表格，正文从约 25 行压到 14 行。
+仍然不含任何 `irm` 管道式安装（测试断言保留）。
+
+### 测试适配（有意为之）
+
+`scripts/test_doc_roles.py` 原本硬性要求 banner 里出现「读者」「执行 agent」。
+英文文档会让它误报，于是改成**双语判定**：
+
+```python
+BANNER_WORDS     = ("读者", "Audience")
+EXEC_ROLE_WORDS  = ("执行 agent", "execution agent")
+DEV_ROLE_WORDS   = ("开发 agent", "development agent")
+```
+
+要守的规则是"文档声明了自己的读者"，不是"文档必须是中文"。断言信息里的
+`found:` 也改为按双语标记定位。
+
+### 发布
+
+配合本次改动打 **v0.1.1**：CI 会先校验 `tag == v<pyproject version>` 与
+`__init__` 一致，再构建 wheel 与离线包并附到新 Release，
+Worker 的 `/latest.json` 在缓存过期后自动指向它。
+
+全套 16 个测试脚本 + Worker 自测 21 项通过。
+
 
