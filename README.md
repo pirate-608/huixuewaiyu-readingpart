@@ -311,7 +311,6 @@ huixuewaiyu-readingpart/
 ├── CLAUDE.md                   # 开发指引（Claude Code）
 ├── AGENTS.md                   # 同一份开发指引，供读取 AGENTS.md 的宿主
 ├── SECURITY.md                 # 历史重写说明与隐私约定
-├── CHANGELOG.md                # 详细更改历史：实测数据、被推翻的假设与踩过的坑
 ├── .env.example                # 凭据模板
 ├── .mcp.json.example           # MCP 注册模板，实际文件由 setup-mcp 生成
 ├── .githooks/pre-commit        # 提交前隐私检查，需手动启用
@@ -429,7 +428,6 @@ uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 | [`CLAUDE.md`](CLAUDE.md) | 架构、依赖方向与开发命令 |
 | [`AGENTS.md`](AGENTS.md) | 同一份开发指引的副本，供读取 AGENTS.md 的宿主 |
 | [`SECURITY.md`](SECURITY.md) | 一次历史重写的说明与隐私约定 |
-| [`CHANGELOG.md`](CHANGELOG.md) | 详细更改历史：实测记录、被推翻的假设与已知问题，按时间追加 |
 | [`DISTRIBUTION.md`](DISTRIBUTION.md) | 三平台分发与注册方式 |
 
 ## License

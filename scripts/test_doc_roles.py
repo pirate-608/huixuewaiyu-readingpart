@@ -7,12 +7,15 @@ This project has two agent roles and their documents must not be mixed:
       SKILL.md, SETUP.md, .env.example, README.md   <- shipped with the skill
 
   开发 agent (works on this project)
-      CLAUDE.md, CHANGELOG.md, DISTRIBUTION.md,
+      CLAUDE.md, DISTRIBUTION.md,
       AGENTS.md                                     <- repo only, NEVER shipped
 
 The rule that actually matters: an installed skill directory must not receive
 development documents. Before this split it received a 2000+ line development
 log, design notes and distribution plans.
+
+CHANGELOG.md deliberately does not appear: it is a maintainer's local log that
+.gitignore keeps out of the repository, so it is neither shipped nor required.
 
 Run: python scripts/test_doc_roles.py
 """
@@ -25,8 +28,12 @@ sys.path.insert(0, str(REPO / "scripts"))
 EXEC_DOCS = {"SKILL.md", "SETUP.md", ".env.example", "README.md",
              "references/api_inference.md"}
 DEV_DOCS = {
-    "CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "DISTRIBUTION.md",
+    "CLAUDE.md", "AGENTS.md", "DISTRIBUTION.md",
 }
+# CHANGELOG.md is deliberately NOT listed: it is a maintainer's local log, kept out
+# of the repository by .gitignore (it grows without bound and mixes conclusions
+# that were later overturned). A fresh clone does not have it, so a test that
+# required it would fail there.
 # Forbidden in anything that ships: development-only documents and the deep
 # implementation notes that belong in CLAUDE.md.
 forbidden_payload = sorted(DEV_DOCS) + ["scripts", "references", "archive"]

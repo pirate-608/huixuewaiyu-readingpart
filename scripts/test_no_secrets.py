@@ -129,8 +129,8 @@ print("\n" + "=" * 58)
 passed = sum(1 for _, ok in results if ok)
 print(f"{passed}/{len(results)} checks passed")
 if f1 or f2:
-    print("\nFix by replacing the value with a placeholder (see CHANGELOG.md")
-    print("for the redaction precedent), then re-run. Note that a past commit still")
+    print("\nFix by replacing the value with a placeholder (SECURITY.md records the")
+    print("redaction precedent), then re-run. Note that a past commit still")
     print("contains it — redacting HEAD does not rewrite history.")
 for name, ok in results:
     if not ok:

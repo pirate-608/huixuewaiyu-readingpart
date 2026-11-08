@@ -39,8 +39,9 @@ This file provides guidance to coding agents working in this repository.
 > 不加平台分支；代码里已有的 POSIX 分支（`/tmp`、symlink、chmod）保留即可，
 > 不构成承诺，也不要扩展。
 >
-> 改动代码前请读 [`CHANGELOG.md`](CHANGELOG.md)：
-> 那里有实测事实、被推翻的假设和踩过的坑。
+> 改动前先读本文与 [`SECURITY.md`](SECURITY.md)（隐私约定）。
+> 维护者本地还有一份 `CHANGELOG.md` 记录实测细节与踩过的坑，但它**不入库**
+> （见 `.gitignore`）；新克隆里没有这个文件是正常的。
 
 ## Overview
 

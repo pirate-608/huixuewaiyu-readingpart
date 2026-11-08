@@ -17,8 +17,8 @@ Design notes
 * **The server must run OUTSIDE the DSH file sandbox.** Measured: Playwright's
   driver transport goes through `asyncio.create_subprocess_exec`, which needs a
   NAMED pipe on Windows, and the sandbox denies `CreateFile("\\\\.\\pipe\\...")`
-  with WinError 5. The sync API is no different (it wraps asyncio). See
-  CHANGELOG.md §24.
+  with WinError 5. The sync API is no different (it wraps asyncio).
+  See the sandbox note in AGENTS.md.
 
 Run:
     python scripts/elang_mcp.py            # stdio transport (normal MCP)

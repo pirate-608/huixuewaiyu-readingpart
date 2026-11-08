@@ -79,7 +79,7 @@ SKILL_NAME = "huixuewaiyu-readingpart"
 #
 # This project has two audiences and they must not be mixed:
 #   * 执行 agent (runs the skill to answer questions) -> SKILL.md, SETUP.md
-#   * 开发 agent (works on this project)              -> CLAUDE.md, CHANGELOG.md,
+#   * 开发 agent (works on this project)              -> CLAUDE.md, AGENTS.md,
 #                                                        DISTRIBUTION.md
 # Development docs deliberately do NOT ship: an answering agent has no use for a
 # design log, and before this split its skill directory received 2000+ lines of

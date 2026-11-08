@@ -5,7 +5,7 @@ name: Mirror to Gitee
 #
 #     uv tool install git+https://gitee.com/<user>/huixuewaiyu-readingpart.git
 #
-# One-time setup (the operations are listed in CHANGELOG.md, section 52):
+# One-time setup (the configuration is listed right below):
 #
 #   Secrets  GITEE_USER            Gitee login name (not the display name)
 #   Secrets  GITEE_TOKEN           Gitee private token with the `projects` scope

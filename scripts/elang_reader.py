@@ -18,7 +18,7 @@ Environment:
   ELANG_TMP_DIR   override the IPC directory (default C:/tmp)
   ELANG_BROWSER   chromium | msedge | chrome (default msedge)
 
-Architecture (当前 PC 版; see CHANGELOG.md):
+Architecture (当前 PC 版; see AGENTS.md for the site and Vue details):
   1. Opens Edge; replays a saved session (cookies + localStorage) so CAS is
      usually skipped entirely. Falls back to CAS login if the session is stale.
   2. Read index -> subject list (`PcReadIndex.$data.listData`)

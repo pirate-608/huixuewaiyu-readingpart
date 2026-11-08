@@ -19,7 +19,7 @@ classifiers = [
 ]
 
 # Only what is needed to RUN. The teaching/docs files (CLAUDE.md,
-# CHANGELOG.md, references/, archive/) deliberately stay out.
+# references/, archive/) deliberately stay out.
 #
 # playwright is upper-bounded on purpose: each release expects its own browser
 # build (1.60 -> chromium-1223), so a careless bump demands a download the user
@@ -78,10 +78,10 @@ packages = ["src/elang"]
 # `importlib.resources` (same approach as the answer bank), falling back to the
 # repo layout for development.
 # EXECUTION-side docs only — these are what `elang install-skill` copies into an
-# agent's skill directory. Development docs (CLAUDE.md, AGENTS.md, CHANGELOG.md,
+# agent's skill directory. Development docs (CLAUDE.md, AGENTS.md,
 # DISTRIBUTION.md) are deliberately NOT shipped:
-# an answering agent does not need them, and shipping them put a 2000-line
-# development log inside every installed skill.
+# an answering agent does not need them, and shipping them put a development log
+# inside every installed skill.
 "SKILL.md" = "elang/share/SKILL.md"
 "SETUP.md" = "elang/share/SETUP.md"
 ".env.example" = "elang/share/.env.example"
