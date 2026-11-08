@@ -4961,4 +4961,46 @@ Python 3.11+），再给离线包的入口地址与三步操作，不再指向 S
 
 全套 16 个测试脚本 + Worker 自测 21 项通过。
 
+---
+
+## 73. Gitee 镜像换账号：旧地址是姓名拼音
+
+原 Gitee 账号名是用户本人的姓名拼音，公开镜像等于把真名挂在仓库地址里。
+已新建同名账号 `pirate-608`（与 GitHub 一致）、仓库
+`huixuewaiyu-readingpart` 与令牌，本仓库随之切换。
+
+### 文档
+
+5 处安装地址全部改为 `https://gitee.com/pirate-608/huixuewaiyu-readingpart`：
+`README.md`（3 处：简介里的镜像说明、快速开始、常见问题）、`SETUP.md` 第 1 步、
+`SKILL.md` 安装一节。
+
+`CHANGELOG.md` 里两处历史记录（§53 的"镜像已配对成功"与当时的安装命令）也一并
+改成新地址。历史记录通常不改写，但这里旧值**本身就是隐私泄漏**，留着没有价值；
+代价是 §53 现在读起来像是当年就在新账号下完成的——本节即为澄清。
+
+### CI：不用改
+
+`.github/workflows/gitee-mirror.yml` 里没有硬编码的用户名或仓库名，全部来自配置：
+
+| 配置 | 值 |
+|---|---|
+| Secret `GITEE_USER` | `pirate-608`（用户已更新） |
+| Secret `GITEE_TOKEN` | 新令牌（用户已更新） |
+| Variable `GITEE_MIRROR_ENABLED` | `true`（原本就有，继续有效） |
+| Variable `GITEE_REPO` | 未设置，回退为仓库名 `huixuewaiyu-readingpart` |
+
+推送目标由 `${GITEE_USER}/${GITEE_REPO}` 拼出，所以只换 secrets 即可。
+门禁条件 `github.repository_owner == 'pirate-608'` 也仍成立。
+
+### 还留着的东西（需要用户自己处理）
+
+- **旧 Gitee 仓库**（旧账号下）仍在，内容还是镜像。建议删除或转为私有——否则
+  "换账号避免真名"只做了一半。
+- **git 历史里仍有旧账号名**：本次只清理了当前文件。彻底抹掉需要重写历史
+  （`git filter-repo` 或 BFG）后强推，会让所有已存在的 clone 失效，属于破坏性
+  操作，本次未做。
+
+全套 16 个测试脚本 + Worker 自测 21 项通过。
+
 
