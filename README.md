@@ -4,7 +4,7 @@ Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.
 
 > **致谢** 本项目基于开源项目 [shixu2026/huixuewaiyu-skill](https://gitee.com/shixu2026/huixuewaiyu-skill) 开发，感谢原作者 [shixu2026](https://gitee.com/shixu2026) 的贡献。
 
-## 交给 agent 完成安装
+## 使用 agent 安装并配置
 
 把下面这句复制给 agent，DSH、Codex、Claude Code 均可：
 
