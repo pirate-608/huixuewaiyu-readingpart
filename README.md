@@ -6,19 +6,12 @@ Playwright 自动化 + AI 答题，批量完成[慧学外语](https://elang.zju.
 
 ## 使用 agent 安装并配置
 
-把下面这句复制给 agent，DSH、Codex、Claude Code 均可：
+复制以下内容给 agent 执行：
 
 ```
-读 https://github.com/pirate-608/huixuewaiyu-readingpart 的 SETUP.md，
-按里面的步骤帮我装好这个工具。我是 <DSH / Codex / Claude Code> 用户。
+读 https://github.com/pirate-608/huixuewaiyu-readingpart （Gitee 镜像 `https://gitee.com/pirate-608/huixuewaiyu-readingpart`）的 SETUP.md，
+按里面的步骤帮我安装并配置这个工具。
 ```
-
-GitHub 打不开时，把上面链接换成 Gitee 镜像
-`https://gitee.com/pirate-608/huixuewaiyu-readingpart`（内容相同，安装命令用
-Gitee 地址）。
-
-agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板（密码由用户填写）、
-注册 skill、注册 MCP。每一步都有验证命令，失败时报告原始错误，不会跳过。
 
 手动安装见[快速开始](#快速开始)。
 
@@ -33,22 +26,7 @@ agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板�
 
 ## 支持范围
 
-**本工具只支持 Windows 10/11（64 位）。** 目标用户是在 Windows 桌面上使用慧学外语的人，
-其他平台不在支持范围。
-
-- 浏览器、验证码、路径与沙箱相关的行为都只在 Windows 上实测过
-- Linux 与 macOS 没有实测环境，也不为它们做兼容或修 bug
-- 代码里保留的少量 POSIX 分支（`/tmp`、symlink、chmod）是顺手写的，不构成承诺
-
-## 三个独立产物
-
-| 产物 | 安装方式 | 职责 |
-|---|---|---|
-| **工具** | `uv tool install` | MCP server 与求解器，自带隔离环境，提供 `elang` 命令 |
-| **skill** | `elang install-skill` | 文档与契约，说明 agent 应执行哪些命令 |
-| **本仓库** | `git clone` | 承载上述两者，也可脱离工具独立运行 |
-
-工具依赖安装在 uv 自身的隔离环境中，不写入系统 Python。
+**本工具仅支持 Windows 10/11（64 位）。** 
 
 ---
 
