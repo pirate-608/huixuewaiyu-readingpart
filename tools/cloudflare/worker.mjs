@@ -68,6 +68,10 @@ async function releaseInfo(c, ctx) {
   }
   const rel = await r.json();
   const asset = (rel.assets || []).find((a) => a.name === c.asset);
+  // The checksum manifest is published as its OWN release asset. It used to be
+  // linked as build/SHA256SUMS in the repo, which is a 404: build/ is gitignored,
+  // so that file never exists in git.
+  const sums = (rel.assets || []).find((a) => a.name === "SHA256SUMS");
   const info = {
     tag: rel.tag_name,
     version: String(rel.tag_name || "").replace(/^v/, ""),
@@ -80,8 +84,8 @@ async function releaseInfo(c, ctx) {
           apiUrl: asset.url,
         }
       : null,
+    sha256Sums: sums ? sums.browser_download_url : null,
     // 校验清单和脚本都随仓库标签走，版本天然对齐
-    sha256Sums: `https://raw.githubusercontent.com/${c.repo}/${rel.tag_name}/build/SHA256SUMS`,
     installScripts: {
       ps1: `https://raw.githubusercontent.com/${c.repo}/${rel.tag_name}/tools/bootstrap/install.ps1`,
       cmd: `https://raw.githubusercontent.com/${c.repo}/${rel.tag_name}/tools/bootstrap/install.cmd`,

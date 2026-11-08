@@ -4775,4 +4775,47 @@ Worker 部署后会先返回 502/503，属预期。
 
 全套 15 个测试脚本 + Worker 自测 20 项全部通过。
 
+---
+
+## 69. 安装入口上线，并修掉一个自己引入的死链
+
+Worker 已部署：**https://elang-install.67656.fun/**。同时仓库配合打了 `v0.1.0`
+标签，`release-bundle.yml` 构建出 65.6 MB 的 bundle 并附到 Release。
+
+### 线上实测
+
+| 检查 | 结果 |
+|---|---|
+| `/healthz` | 200 `ok` |
+| `/latest.json` | 200，`tag=v0.1.0`、`version=0.1.0`、资产 68,776,646 字节 |
+| `/` | 200，2534 字节；含 uv 安装、含 `install.cmd`、**不含 `irm`/`iex`** |
+| `/elang-bundle-win64.zip` | 302 跳 Release 资产 |
+| `/install.ps1`、`/install.cmd` | 200，10130 / 382 字节，按 `v0.1.0` 标签取 |
+| Release 资产内容 | 38 项：运行时 21.5 MB + 34 wheel + 两个脚本 + `SHA256SUMS` + `VERSION` |
+
+### 修掉的问题：`sha256Sums` 指向一个永远不存在的路径
+
+第一版 Worker 把校验清单写成
+`raw.githubusercontent.com/<repo>/<tag>/build/SHA256SUMS`——但 **`build/` 是
+gitignored 的构建产物目录，仓库里从来没有这个文件**，实测 404。
+
+改为：清单作为**独立 Release 资产**发布，Worker 从 release 的 assets 里按名字取
+（`sha256Sums: <资产的下载地址>`，缺失时为 `null`）。配套改动：
+
+- `.github/workflows/release-bundle.yml` 现在同时附 `build/bundle/SHA256SUMS`
+- 已手工把 `v0.1.0` 的 `SHA256SUMS` 补传为 Release 资产（3897 字节）
+- `tools/cloudflare/test_worker.mjs` 增加断言：清单必须指向 release 资产而非仓库
+  的 `build/`，防止再写回去
+
+顺带修正 `tools/bootstrap/README.md` 一处描述错误：`SHA256SUMS` 其实**覆盖了两个
+安装脚本**（`build_bundle.py` 只排除自己和 `VERSION`），此前写成"不覆盖脚本自身"。
+
+### 需要重新部署
+
+Worker 代码改了 `sha256Sums` 的取值方式，**当前线上仍是旧版本**。重新部署后
+`/latest.json` 的 `sha256Sums` 才会指向可下载的资产。部署命令见
+`tools/cloudflare/README.md`。
+
+全套 15 个测试脚本 + Worker 自测 21 项通过。
+
 

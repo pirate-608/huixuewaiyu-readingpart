@@ -41,6 +41,9 @@ const RELEASE = {
     { name: "elang-bundle-win64.zip", size: 75_600_000,
       browser_download_url: "https://github.com/o/r/releases/download/v0.1.0/elang-bundle-win64.zip",
       url: "https://api.github.com/assets/1" },
+    { name: "SHA256SUMS", size: 3897,
+      browser_download_url: "https://github.com/o/r/releases/download/v0.1.0/SHA256SUMS",
+      url: "https://api.github.com/assets/3" },
     { name: "other.txt", size: 1, browser_download_url: "https://example/other", url: "https://api.github.com/assets/2" },
   ],
 };
@@ -94,6 +97,9 @@ check("GET /latest.json -> 200", r.status === 200);
 check("版本去掉了 v 前缀", info.version === "0.1.0", info.version);
 check("找到 bundle 资产", info.asset && info.asset.name === "elang-bundle-win64.zip");
 check("给出脚本地址", String(info.installScripts?.ps1 || "").includes("/tools/bootstrap/install.ps1"));
+check("校验清单指向 Release 资产而不是仓库 build/",
+  String(info.sha256Sums || "").endsWith("/releases/download/v0.1.0/SHA256SUMS"),
+  String(info.sha256Sums));
 
 console.log("\n=== 缓存 ===");
 const before = calls.length;

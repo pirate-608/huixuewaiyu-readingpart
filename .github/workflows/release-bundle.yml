@@ -72,7 +72,11 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/elang-bundle-win64.zip
+          # SHA256SUMS is attached separately so the install-entry Worker can link
+          # to it directly; it also lives INSIDE the zip for offline verification.
+          files: |
+            build/elang-bundle-win64.zip
+            build/bundle/SHA256SUMS
           fail_on_unmatched_files: true
           body: |
             `elang-bundle-win64.zip` 是为**没有 uv** 的机器准备的离线安装包：
@@ -80,5 +84,7 @@ jobs:
 
             Offline installer for machines without uv: unzip, then run
             `install.cmd`. No network access needed during install.
+
+            `SHA256SUMS` 是该包内各文件的校验清单（同一份也在 zip 里）。
 
             已装 uv 的用户继续用原有方式即可，不需要这个包。

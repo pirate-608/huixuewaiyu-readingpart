@@ -75,7 +75,7 @@ elang list
 
 ### 没有 uv 时：离线安装包
 
-机器上装不了 uv（企业策略、没有管理员权限、或装的时候连不上 GitHub / PyPI）时，
+机器上装不了 uv 时，
 改用离线包。包里有 Python 运行时和全部依赖，**安装过程不需要联网**。
 
 从仓库的 Releases 页面下载 `elang-bundle-win64.zip`，解压到任意目录，然后在

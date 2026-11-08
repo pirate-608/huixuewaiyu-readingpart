@@ -94,8 +94,9 @@ python tools/bootstrap/build_bundle.py --wheel dist/elang_reading-0.1.0-py3-none
 
 **2. 校验范围只到"防损坏"**
 
-`SHA256SUMS` 覆盖运行时和所有 wheel，但**不覆盖脚本自身**，也不防"整包被换掉"。
-真要防篡改，需要分发侧（Release 页面 / 自有域名）给出 zip 的哈希并让用户核对。
+`SHA256SUMS` 覆盖运行时、所有 wheel，以及两个安装脚本（`install.ps1` / `install.cmd`），
+但不覆盖它自己和 `VERSION`，也**不防"整包被换掉"**。真要防篡改，需要分发侧
+（Release 页面 / 安装入口）给出 zip 的哈希并让用户核对。
 不要在文档里把它说成签名验证。
 
 ## 与 uv 安装路径的关系
