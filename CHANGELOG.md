@@ -4626,4 +4626,87 @@ after : ['.env.example', 'README.md', 'SETUP.md', 'SKILL.md',
 - `resolve_source("references/api_inference.md")` 正常解析到仓库路径
 - 全套 15 个测试脚本通过（含 `test_doc_roles` 的 payload↔share 集合校验）
 
+---
+
+## 67. 离线安装包：给没有 uv 的机器
+
+新增第二条安装路径，**完全不影响原有的 uv 分发**：不碰 `pyproject.toml` 的
+wheel/sdist 内容，不碰 `install_skill.PAYLOAD`，uv 那条路一行没改。
+
+### 为什么要有这条路
+
+`uv tool install` 要求机器上先有 uv，而 uv 自己还要能访问 GitHub / PyPI。
+真正的障碍通常不是"uv 不好用"，而是企业策略不让装、没有管理员权限、或装到一半
+网络失败。离线包把"安装时要不要联网"整个消掉。
+
+### 实测数据（本机）
+
+| 项 | 数值 |
+|---|---|
+| bundle zip | **72.1 MB** |
+| 运行时（python-build-standalone，`install_only_stripped`） | **21.0 MB** |
+| wheelhouse | **51.6 MB / 34 个**，playwright 被 `<1.61` 锁到 **1.60.0** |
+| 安装后磁盘 | **235.6 MB**（runtime 60.5 + venv 175.1） |
+| 安装耗时 | 数十秒，`pip install --no-index --find-links` **零网络** |
+
+验证方法：把 PATH 裁到只剩 `System32;\Windows;\WindowsPowerShell`
+（`python`/`uv`/`pip` 全不在），从产品化 bundle 安装到干净目录，结果：
+
+```
+verified: 37 file(s) → interpreter: Python 3.13.18
+Successfully installed ... playwright-1.60.0 ...
+imports ok
+elang doctor → playwright ok / mcp ok / launch ok / All good
+```
+
+`-Check`、启动器、`-Uninstall` 均实测通过；对已安装目录重跑是幂等的。
+**干净机器关键场景**也验了：`PLAYWRIGHT_BROWSERS_PATH` 指向空目录时自动退回
+系统 Chrome（`choice: system — Google Chrome v157`，`launch: ok`），
+即用户只要有 Chrome/Edge 就不需要额外下载浏览器。
+
+### 关键教训：安装脚本不能依赖模块化 cmdlet
+
+第一版在干净环境**直接失败**：
+
+```
+Get-FileHash : The term 'Get-FileHash' is not recognized...
+```
+
+原因是 PowerShell 7 启动 Windows PowerShell 5.1 时，子进程继承了 pwsh7 的
+`PSModulePath`，模块提供的 cmdlet 找不到。改成纯 .NET
+（`[System.Security.Cryptography.SHA256]`、`[System.IO.*]`）后一次通过。
+这条写进了 `tools/bootstrap/README.md`，改脚本时必须遵守。
+
+### 新增文件
+
+| 路径 | 作用 |
+|---|---|
+| `tools/bootstrap/install.ps1` | 安装器：校验 → 解压运行时 → 建 venv → 离线装 wheel → 写启动器 → 可选改 PATH → 写 manifest → 自检 |
+| `tools/bootstrap/install.cmd` | 薄封装（`-NoProfile -ExecutionPolicy Bypass`，不联网） |
+| `tools/bootstrap/build_bundle.py` | 构建 bundle：拉 PBA 运行时、`pip download --platform win_amd64` 出 wheelhouse、生成 `SHA256SUMS`/`VERSION`、打 zip |
+| `tools/bootstrap/README.md` | 开发文档：为何做、构建命令、参数表、两个已知坑 |
+| `.github/workflows/release-bundle.yml` | 手动或 `v*` 标签触发：出 wheel → 打 bundle → 上传产物，打标签时附到 Release |
+
+`build/` 与 `dist/` 本就在 `.gitignore` 里，产物不入库。
+OCR 默认**不进包**（ddddocr 全家桶约 275 MB），需要时用
+`build_bundle.py --with-ocr` 私有构建。
+
+### 与 uv 路径的关系
+
+两条路互不干扰，装在不同位置（`%LOCALAPPDATA%\elang` vs
+`%APPDATA%\uv\tools`），`-Uninstall` 只删自己加的 PATH 项和目录，
+不碰 uv 那份，也保留 `%USERPROFILE%\.elang` 用户数据。两者的
+`elang doctor` 输出里 `source` 行会显示各自实际路径，便于分辨。
+
+### 文档
+
+`SETUP.md` 增加"没有 uv 时：离线安装包"（参数表、安装位置、与新终端提示），
+`README.md` 的安装段落指向它；两处都补充了 **uv 自身的 winget 安装命令**：
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+全套 15 个测试脚本通过。
+
 

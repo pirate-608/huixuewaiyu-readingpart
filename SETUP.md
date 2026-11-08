@@ -47,6 +47,14 @@
 
 ## 第 1 步：装工具
 
+先确认机器上已有 `uv`。Windows 上可以用 winget 安装：
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+然后安装工具：
+
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
@@ -64,6 +72,34 @@ elang list
 ```
 
 应列出：`doctor` `init-env` `install-browser` `setup-mcp` `install-skill` `run` `mcp`，以及答题侧动词 `pending` `answer` `skip` `continue` `stop`
+
+### 没有 uv 时：离线安装包
+
+机器上装不了 uv（企业策略、没有管理员权限、或装的时候连不上 GitHub / PyPI）时，
+改用离线包。包里有 Python 运行时和全部依赖，**安装过程不需要联网**。
+
+从仓库的 Releases 页面下载 `elang-bundle-win64.zip`，解压到任意目录，然后在
+该目录里执行：
+
+```powershell
+.\install.cmd                    # 装到 %LOCALAPPDATA%\elang
+```
+
+常用参数：
+
+| 参数 | 作用 |
+|---|---|
+| `-Target D:\elang` | 换安装位置 |
+| `-Check` | 只报告状态，不改动 |
+| `-Uninstall` | 卸载（只删自己加的 PATH 项，保留浏览器 profile 等用户数据） |
+| `-NoPath` | 不改 PATH，用绝对路径调用 |
+| `-NoDoctor` | 跳过安装后的自检 |
+
+装完会打印启动器路径，默认 `%LOCALAPPDATA%\elang\bin\elang.cmd`。
+**打开一个新终端**后 `elang` 才会出现在 PATH 里。
+
+两条安装路径互不干扰：离线包装在 `%LOCALAPPDATA%\elang`，uv 装的那份在
+`%APPDATA%\uv\tools`，`-Uninstall` 不会碰 uv 那份。
 
 ### 可选：验证码 OCR（默认不装）
 

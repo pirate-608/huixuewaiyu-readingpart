@@ -56,6 +56,14 @@ agent 会按 SETUP.md 完成安装工具、安装浏览器、生成凭据模板�
 
 ### 1. 安装工具
 
+先确认机器上已有 `uv`。Windows 上可以用 winget 安装：
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+然后安装工具：
+
 ```bash
 uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```
@@ -65,6 +73,9 @@ uv tool install git+https://github.com/pirate-608/huixuewaiyu-readingpart.git
 ```bash
 uv tool install git+https://gitee.com/pirate-608/huixuewaiyu-readingpart.git
 ```
+
+**机器上装不了 uv，或者装的时候连不上网**：改用离线安装包，解压后运行
+`install.cmd`，全程不联网。见 [SETUP.md](SETUP.md) 的"没有 uv 时：离线安装包"。
 
 ### 2. 安装浏览器
 
@@ -307,7 +318,8 @@ huixuewaiyu-readingpart/
 │   ├── elang_session.py        # 显式状态机，零阻塞
 │   ├── elang_mcp.py            # MCP server，10 个工具
 │   └── setup.py                # 克隆本仓库后的一键安装
-└── references/                 # 题库，answers.json 同时打进 wheel
+├── references/                 # 题库与站点接口说明，answers.json 同时打进 wheel
+└── tools/bootstrap/            # 离线安装包的构建与安装脚本（不随 skill 分发）
 ```
 
 ### 从源码安装

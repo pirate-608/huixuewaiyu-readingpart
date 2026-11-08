@@ -1,0 +1,84 @@
+name: Build offline bundle
+
+# Builds `elang-bundle-win64.zip` — the installer for machines that have no uv
+# (see tools/bootstrap/README.md). The uv path stays exactly as it is: this
+# workflow only ADDS a release artifact, it never touches the wheel/sdist that
+# `uv tool install` consumes.
+#
+# Triggers:
+#   - manual dispatch: build the bundle from the current default branch
+#   - tag push vX.Y.Z: build it and attach it to that GitHub Release
+#
+# Runs on Linux on purpose: `pip download --platform win_amd64` can resolve the
+# Windows wheels from any OS, and the runner is cheaper than a Windows one.
+# The bundle is never executed here, only assembled.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: offline-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write          # needed to attach the zip to a Release
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build the wheel
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+          ls -l dist/
+
+      - name: Assemble the bundle
+        run: |
+          set -euo pipefail
+          wheel="$(ls dist/*.whl | head -1)"
+          echo "wheel: ${wheel}"
+          python tools/bootstrap/build_bundle.py --wheel "${wheel}"
+
+      - name: Show what was produced
+        run: |
+          set -euo pipefail
+          ls -lh build/elang-bundle-win64.zip
+          echo "---- bundle contents (top level) ----"
+          ls -1 build/bundle
+          echo "---- wheels ----"
+          ls -1 build/bundle/wheels | wc -l
+
+      - name: Upload as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: elang-bundle-win64
+          path: build/elang-bundle-win64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to the release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/elang-bundle-win64.zip
+          fail_on_unmatched_files: true
+          body: |
+            `elang-bundle-win64.zip` 是为**没有 uv** 的机器准备的离线安装包：
+            解压后运行 `install.cmd`，全程不联网。
+
+            Offline installer for machines without uv: unzip, then run
+            `install.cmd`. No network access needed during install.
+
+            已装 uv 的用户继续用原有方式即可，不需要这个包。
